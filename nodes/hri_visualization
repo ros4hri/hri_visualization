@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+
+# Things to do:
+#	- pep8 the code
+#	- using PIL for text, with futura font
+#	- animate the label movement, in a "bubbly way"
+#		(a little bit of overshoot/undershoot in the label
+#		 movement)
+#	- doing the same we're doing for faces with bodies and skeletons
+#	- using parameters
+
+import rospy
+from hri_msgs.msg import IdsList
+from sensor_msgs.msg import Image, RegionOfInterest
+from cv_bridge import CvBridge
+import cv2
+import numpy as np
+
+BLUE = (255, 220, 0)
+WHITE = (255, 255, 255)
+THICKNESS = 5
+THICKNESS_CORNERS = 3
+LABEL_DISTANCE = 50
+LABEL_WIDTH = 80
+LABEL_HEIGHT = 30
+LABEL_LINE_THICKNESS = 2
+FONT = cv2.FONT_HERSHEY_SIMPLEX
+FONT_THICKNESS = 2
+
+class hri_visualizer:
+
+	def __init__(self):
+		""" Constructor """
+
+		self.face_sub = rospy.Subscriber("/humans/faces/tracked",
+										 IdsList,
+										 self.face_cb,
+										 queue_size=1)
+
+		self.img_cb = rospy.Subscriber("/camera/color/image_raw",
+									   Image,
+									   self.img_cb,
+									   queue_size=1)
+
+		self.img_pub = rospy.Publisher("/visualization",
+									   Image,
+									   queue_size=1)
+
+		self.bridge = CvBridge()
+		self.faces = {}
+
+		self.calibrate_font_size()	
+
+	def face_cb(self, msg):
+		""" Callback managing the list of face ids
+			published. It stores the ids in a list """
+
+		for id in msg.ids:
+			if not id in list(self.faces):
+				self.faces[id] = [rospy.Subscriber("/humans/faces/"+id+"/roi", 
+												   RegionOfInterest, 
+												   self.roi_cb, 
+												   (id)),
+								  None,
+								  None]
+
+		for id in list(self.faces):
+			if not id in msg.ids:
+				self.faces[id][0].unregister()
+				del self.faces[id]
+
+
+	def roi_cb(self, msg, args):
+		""" Callback managing the rois.
+			It stores the face ids
+			and their rois. """
+
+		face_id = args
+		self.faces[face_id][1] = msg
+
+
+	def img_cb(self, msg):
+		""" Callback managing the incoming images. 
+			It draws the bounding boxes for the 
+			detected components """
+
+		# max distance of a point from the furthest corner
+		max_distance = np.sqrt(msg.height**2 + msg.width**2)
+
+		img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+		for id in self.faces:
+			face = self.faces[id]
+			if face[1]:
+				starting_point = (face[1].x_offset, face[1].y_offset)
+				ending_point = (face[1].x_offset + face[1].width, 
+								face[1].y_offset + face[1].height)
+				img = cv2.rectangle(img, 
+									starting_point, 
+									ending_point, 
+									BLUE, 
+									THICKNESS,
+									lineType=cv2.LINE_AA)
+				ptsTopLeft = np.array([[face[1].x_offset+20, face[1].y_offset+40],
+							  		   [face[1].x_offset+20, face[1].y_offset+20],
+							  		   [face[1].x_offset+40, face[1].y_offset+20]],
+							  		   dtype=np.int32)
+				ptsBottomLeft = np.array([[face[1].x_offset+20, face[1].y_offset+face[1].height-40],
+							  		   	  [face[1].x_offset+20, face[1].y_offset+face[1].height-20],
+							  		   	  [face[1].x_offset+40, face[1].y_offset+face[1].height-20]],
+							  		   	  dtype=np.int32)
+				ptsBottomRight = np.array([[face[1].x_offset+face[1].width-40, face[1].y_offset+face[1].height-20],
+							  		   	   [face[1].x_offset+face[1].width-20, face[1].y_offset+face[1].height-20],
+							  		   	   [face[1].x_offset+face[1].width-20, face[1].y_offset+face[1].height-40]],
+							  		   	   dtype=np.int32)
+				ptsTopRight = np.array([[face[1].x_offset+face[1].width-40, face[1].y_offset+20],
+							  		   	[face[1].x_offset+face[1].width-20, face[1].y_offset+20],
+							  		   	[face[1].x_offset+face[1].width-20, face[1].y_offset+40]],
+							  		   	dtype=np.int32)
+
+				img = cv2.polylines(img, 
+					                [ptsTopLeft, ptsBottomLeft, ptsBottomRight, ptsTopRight], 
+					                isClosed=False,
+					                color=BLUE,
+					                thickness=THICKNESS,
+					                lineType=cv2.LINE_AA)
+
+				# Now inserting the label.
+				# Step 1: checking if a label point already exists.
+				# If this is not the case, selecting the further point
+				# the corners of the image.
+				if not face[2]:
+					further_corner = self.find_max_distance_corner(face[1].x_offset+face[1].width/2,
+																   face[1].y_offset+face[1].height/2,
+																   msg.width,
+																   msg.height)
+					face[2] = [further_corner[0]*msg.width, further_corner[1]*msg.height]
+				# Step 2: if the corner has already been computed,
+				# it will remain the same as long as the label would
+				# be outside of the image.
+				roi_corner = np.array([face[1].x_offset+(face[2][0]/msg.width*face[1].width),
+									   face[1].y_offset+(face[2][1]/msg.height*face[1].height)])
+				corner_to_corner = np.array(face[2]) - roi_corner
+				label_corner = roi_corner \
+								+ (corner_to_corner/np.linalg.norm(corner_to_corner, 2))*LABEL_DISTANCE
+				distance = np.sqrt((roi_corner[0]-face[2][0])**2+
+								   (roi_corner[1]-face[2][1])**2)
+				if(distance < (LABEL_DISTANCE + np.sqrt(LABEL_WIDTH**2 + LABEL_HEIGHT**2))\
+					or (label_corner[0] - LABEL_WIDTH < 0)\
+					or (label_corner[0] + LABEL_WIDTH > msg.width)\
+					or (label_corner[1] - LABEL_HEIGHT < 0)\
+					or (label_corner[1] + LABEL_HEIGHT > msg.height)):
+					further_corner = self.find_max_distance_corner(face[1].x_offset+face[1].width/2,
+															   face[1].y_offset+face[1].height/2,
+															   msg.width,
+															   msg.height)
+					face[2] = [further_corner[0]*msg.width, further_corner[1]*msg.height]
+					roi_corner = np.array([face[1].x_offset+(face[2][0]/msg.width*face[1].width),
+									   face[1].y_offset+(face[2][1]/msg.height*face[1].height)])
+					corner_to_corner = np.array(face[2]) - roi_corner
+					label_corner = roi_corner \
+									+ (corner_to_corner/np.linalg.norm(corner_to_corner, 2))*LABEL_DISTANCE
+
+				# Step 3: at this point the face should have assigned a far enough 
+				# corner point. It's time to print the label
+				roi_corner = np.array(roi_corner, dtype=int)
+				label_corner = np.array(label_corner, dtype=int)
+				img = cv2.line(img, 
+							   roi_corner, 
+							   label_corner, 
+							   color=BLUE, 
+							   thickness=LABEL_LINE_THICKNESS,
+							   lineType=cv2.LINE_AA)
+				roi_corner_opposite = self.encode_opposite_corner(face[2][0], face[2][1])
+				if roi_corner_opposite[0] == 0:
+					label_top_left_x = label_corner[0]
+					label_bottom_right_x = label_corner[0] + LABEL_WIDTH
+				else:
+					label_top_left_x = label_corner[0] - LABEL_WIDTH
+					label_bottom_right_x = label_corner[0]
+				if roi_corner_opposite[1] == 0:
+					label_top_left_y = label_corner[1]
+					label_bottom_right_y = label_corner[1] + LABEL_HEIGHT
+				else:
+					label_top_left_y = label_corner[1] - LABEL_HEIGHT
+					label_bottom_right_y = label_corner[1]
+
+				text_bottom_left = [label_top_left_x + 5, label_bottom_right_y - 3]
+
+				img = cv2.rectangle(img,
+							   	    [label_top_left_x, label_top_left_y],
+							        [label_bottom_right_x, label_bottom_right_y],
+							        BLUE,
+							        -1,
+							        lineType=cv2.LINE_AA)
+
+				(text_size, text_height), _ = cv2.getTextSize(id, FONT, self.scale, FONT_THICKNESS)
+				text_bottom_left = [label_top_left_x + (LABEL_WIDTH-text_size)/2, 
+									label_bottom_right_y - (LABEL_HEIGHT-text_height)/2]
+				text_bottom_left = np.array(text_bottom_left, dtype=int)
+				img =  cv2.putText(img,
+								   id,
+								   text_bottom_left,
+								   FONT,
+								   self.scale,
+								   WHITE,
+								   FONT_THICKNESS,
+								   lineType=cv2.LINE_AA)
+		
+		img = self.bridge.cv2_to_imgmsg(img, "bgr8")
+		self.img_pub.publish(img)
+
+	def find_max_distance_corner(self, x, y, width, height):
+		""" Function returning the maximum distance 
+			corner of the image. The result is encoded as:
+				- [0, 0] = top left corner
+				- [1, 0] = top right corner
+				- [0, 1] = bottom left corner
+				- [1, 1] = bottom right corner """
+
+		return [x < width/2, y < height/2]
+
+	def encode_opposite_corner(self, corner_x, corner_y):
+		""" Following the same type of enconding 
+			described in the find_max_distance_corner,
+			this function returns the opposite corner """
+
+		return [int(not bool(corner_x)), int(not bool(corner_y))]
+
+	def calibrate_font_size(self):
+		""" Initial calibration of the font size
+			for the ids label """
+		self.scale = 0.0
+		text_size = 0
+		text_height = 0
+		label = "wwwww"
+		while text_size < (LABEL_WIDTH - 10)\
+		  and text_height < (LABEL_HEIGHT - 6):
+		  	self.scale+=0.01
+		  	(text_size, text_height), _ = cv2.getTextSize(label, FONT, self.scale, FONT_THICKNESS)
+		self.scale-=0.01
+
+
+if __name__=="__main__":
+	rospy.init_node("hri_visualization")
+
+	visualizer = hri_visualizer()
+
+	rospy.spin()
+
+
