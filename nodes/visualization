@@ -102,28 +102,31 @@ class hri_visualizer:
 									BLUE, 
 									THICKNESS,
 									lineType=cv2.LINE_AA)
-				ptsTopLeft = np.array([[face[1].x_offset+20, face[1].y_offset+40],
-							  		   [face[1].x_offset+20, face[1].y_offset+20],
-							  		   [face[1].x_offset+40, face[1].y_offset+20]],
+				# sizing the height/width of the localisation corners
+				visualization_corners_width = int(face[1].width/10)
+				visualization_corners_height = int(face[1].height/10)
+				ptsTopLeft = np.array([[face[1].x_offset+max(10, visualization_corners_width), face[1].y_offset+(2*visualization_corners_height)],
+							  		   [face[1].x_offset+max(10, visualization_corners_width), face[1].y_offset+max(10, visualization_corners_height)],
+							  		   [face[1].x_offset+(2*visualization_corners_width), face[1].y_offset+max(10, visualization_corners_height)]],
 							  		   dtype=np.int32)
-				ptsBottomLeft = np.array([[face[1].x_offset+20, face[1].y_offset+face[1].height-40],
-							  		   	  [face[1].x_offset+20, face[1].y_offset+face[1].height-20],
-							  		   	  [face[1].x_offset+40, face[1].y_offset+face[1].height-20]],
+				ptsBottomLeft = np.array([[face[1].x_offset+max(10, visualization_corners_width), face[1].y_offset+face[1].height-(2*visualization_corners_height)],
+							  		   	  [face[1].x_offset+max(10, visualization_corners_width), face[1].y_offset+face[1].height-max(10, visualization_corners_height)],
+							  		   	  [face[1].x_offset+(2*visualization_corners_width), face[1].y_offset+face[1].height-max(10, visualization_corners_height)]],
 							  		   	  dtype=np.int32)
-				ptsBottomRight = np.array([[face[1].x_offset+face[1].width-40, face[1].y_offset+face[1].height-20],
-							  		   	   [face[1].x_offset+face[1].width-20, face[1].y_offset+face[1].height-20],
-							  		   	   [face[1].x_offset+face[1].width-20, face[1].y_offset+face[1].height-40]],
+				ptsBottomRight = np.array([[face[1].x_offset+face[1].width-(2*visualization_corners_width), face[1].y_offset+face[1].height-max(10, visualization_corners_height)],
+							  		   	   [face[1].x_offset+face[1].width-max(10, visualization_corners_width), face[1].y_offset+face[1].height-max(10, visualization_corners_height)],
+							  		   	   [face[1].x_offset+face[1].width-max(10, visualization_corners_width), face[1].y_offset+face[1].height-(2*visualization_corners_height)]],
 							  		   	   dtype=np.int32)
-				ptsTopRight = np.array([[face[1].x_offset+face[1].width-40, face[1].y_offset+20],
-							  		   	[face[1].x_offset+face[1].width-20, face[1].y_offset+20],
-							  		   	[face[1].x_offset+face[1].width-20, face[1].y_offset+40]],
+				ptsTopRight = np.array([[face[1].x_offset+face[1].width-(2*visualization_corners_width), face[1].y_offset+max(10, visualization_corners_height)],
+							  		   	[face[1].x_offset+face[1].width-max(10, visualization_corners_width), face[1].y_offset+max(10, visualization_corners_height)],
+							  		   	[face[1].x_offset+face[1].width-max(10, visualization_corners_width), face[1].y_offset+(2*visualization_corners_height)]],
 							  		   	dtype=np.int32)
 
 				img = cv2.polylines(img, 
 					                [ptsTopLeft, ptsBottomLeft, ptsBottomRight, ptsTopRight], 
 					                isClosed=False,
 					                color=BLUE,
-					                thickness=THICKNESS,
+					                thickness=THICKNESS_CORNERS,
 					                lineType=cv2.LINE_AA)
 
 				# Now inserting the label.
