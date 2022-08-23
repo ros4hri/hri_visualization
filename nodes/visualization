@@ -15,6 +15,8 @@ from sensor_msgs.msg import Image, RegionOfInterest
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
+from PIL import ImageFont, ImageDraw
+from PIL import Image as PILImage
 
 BLUE = (255, 220, 0)
 WHITE = (255, 255, 255)
@@ -24,8 +26,7 @@ LABEL_DISTANCE = 50
 LABEL_WIDTH = 80
 LABEL_HEIGHT = 30
 LABEL_LINE_THICKNESS = 2
-FONT = cv2.FONT_HERSHEY_SIMPLEX
-FONT_THICKNESS = 2
+FONT = "Waree-BoldOblique.ttf"
 
 class hri_visualizer:
 
@@ -47,9 +48,10 @@ class hri_visualizer:
 									   queue_size=1)
 
 		self.bridge = CvBridge()
+		
 		self.faces = {}
 
-		self.calibrate_font_size()	
+		self.calibrate_font_size()
 
 	def face_cb(self, msg):
 		""" Callback managing the list of face ids
@@ -193,19 +195,19 @@ class hri_visualizer:
 							        -1,
 							        lineType=cv2.LINE_AA)
 
-				(text_size, text_height), _ = cv2.getTextSize(id, FONT, self.scale, FONT_THICKNESS)
-				text_bottom_left = [label_top_left_x + (LABEL_WIDTH-text_size)/2, 
-									label_bottom_right_y - (LABEL_HEIGHT-text_height)/2]
-				text_bottom_left = np.array(text_bottom_left, dtype=int)
-				img =  cv2.putText(img,
-								   id,
-								   text_bottom_left,
-								   FONT,
-								   self.scale,
-								   WHITE,
-								   FONT_THICKNESS,
-								   lineType=cv2.LINE_AA)
-		
+				text_width, text_height = self.font.getsize(id)
+				text_top_left = [label_top_left_x + (LABEL_WIDTH-text_width)/2, 
+									label_top_left_y + (LABEL_HEIGHT-text_height)/2]
+				text_top_left = np.array(text_top_left, dtype=int)
+
+				rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+				pil_img = PILImage.fromarray(rgb_img)
+
+				draw = ImageDraw.Draw(pil_img)
+				draw.text(text_top_left, id, font=self.font)
+
+				img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
 		img = self.bridge.cv2_to_imgmsg(img, "bgr8")
 		self.img_pub.publish(img)
 
@@ -228,16 +230,20 @@ class hri_visualizer:
 
 	def calibrate_font_size(self):
 		""" Initial calibration of the font size
-			for the ids label """
-		self.scale = 0.0
-		text_size = 0
-		text_height = 0
+			for the ids label. It uses PIL tools,
+			not opencv tools """
+
+		self.fontsize = 1
 		label = "wwwww"
-		while text_size < (LABEL_WIDTH - 10)\
+		font = ImageFont.truetype(FONT, self.fontsize)
+		text_width, text_height = font.getsize(label)
+		while text_width < (LABEL_WIDTH - 10)\
 		  and text_height < (LABEL_HEIGHT - 6):
-		  	self.scale+=0.01
-		  	(text_size, text_height), _ = cv2.getTextSize(label, FONT, self.scale, FONT_THICKNESS)
-		self.scale-=0.01
+		  	self.fontsize += 1
+		  	font = ImageFont.truetype(FONT, self.fontsize)
+		  	text_size, text_height = font.getsize(label)
+		self.fontsize -= 1
+		self.font = ImageFont.truetype(FONT, self.fontsize)
 
 
 if __name__=="__main__":
