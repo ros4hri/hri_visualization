@@ -9,7 +9,7 @@ catkin_package(
     std_msgs
     hri_msgs)
 
-catkin_install_python(PROGRAMS nodes/hri_visualization
+catkin_install_python(PROGRAMS nodes/visualization
                       DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 

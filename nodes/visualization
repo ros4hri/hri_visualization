@@ -37,7 +37,7 @@ class hri_visualizer:
 										 self.face_cb,
 										 queue_size=1)
 
-		self.img_cb = rospy.Subscriber("/camera/color/image_raw",
+		self.img_cb = rospy.Subscriber("/image",
 									   Image,
 									   self.img_cb,
 									   queue_size=1)

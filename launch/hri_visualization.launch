@@ -1,0 +1,10 @@
+<launch>
+
+    <arg name="rgb_camera" default="/camera/color/"/>
+    <arg name="rgb_camera_topic" default="$(arg rgb_camera)/image_raw"/>
+
+    <node pkg="hri_visualization" name="hri_visualization" type="visualization" output="screen">
+        <remap from="image" to="$(arg rgb_camera_topic)"/>
+    </node>
+
+</launch>
