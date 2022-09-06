@@ -11,7 +11,7 @@
 
 import rospy
 from hri_msgs.msg import IdsList
-from sensor_msgs.msg import Image, RegionOfInterest
+from sensor_msgs.msg import Image, RegionOfInterest, CompressedImage
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
@@ -28,9 +28,11 @@ LABEL_HEIGHT = 30
 LABEL_LINE_THICKNESS = 2
 FONT = "Waree-BoldOblique.ttf"
 
+
 class hri_visualizer:
 
-	def __init__(self):
+	def __init__(self, 
+				 compressed_output):
 		""" Constructor """
 
 		self.face_sub = rospy.Subscriber("/humans/faces/tracked",
@@ -43,15 +45,23 @@ class hri_visualizer:
 									   self.img_cb,
 									   queue_size=1)
 
-		self.img_pub = rospy.Publisher("/visualization",
-									   Image,
-									   queue_size=1)
+		self.compressed_output = compressed_output
+
+		if compressed_output:
+			self.img_pub = rospy.Publisher("/visualization/compressed",
+										   CompressedImage,
+										   queue_size=1)
+		else:
+			self.img_pub = rospy.Publisher("/visualization",
+										   Image,
+										   queue_size=1)
 
 		self.bridge = CvBridge()
 		
 		self.faces = {}
 
 		self.calibrate_font_size()
+
 
 	def face_cb(self, msg):
 		""" Callback managing the list of face ids
@@ -90,7 +100,7 @@ class hri_visualizer:
 		max_distance = np.sqrt(msg.height**2 + msg.width**2)
 
 		img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-		for id in self.faces:
+		for id in list(self.faces):
 			face = self.faces[id]
 			if face[1]:
 				starting_point = (face[1].x_offset, face[1].y_offset)
@@ -211,8 +221,15 @@ class hri_visualizer:
 
 				img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
-		img = self.bridge.cv2_to_imgmsg(img, "bgr8")
-		self.img_pub.publish(img)
+		if self.compressed_output:
+			img_msg = CompressedImage()
+			img_msg.header.stamp = rospy.Time.now()
+			img_msg.format = "jpeg"
+			img_msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
+		else:
+			img_msg = self.bridge.cv2_to_imgmsg(img, "bgr8")
+
+		self.img_pub.publish(img_msg)
 
 	def find_max_distance_corner(self, x, y, width, height):
 		""" Function returning the maximum distance 
@@ -252,7 +269,9 @@ class hri_visualizer:
 if __name__=="__main__":
 	rospy.init_node("hri_visualization")
 
-	visualizer = hri_visualizer()
+	compressed_output = rospy.get_param("~compressed_output", False)
+	
+	visualizer = hri_visualizer(compressed_output)
 
 	rospy.spin()
 
