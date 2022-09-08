@@ -26,7 +26,7 @@ LABEL_DISTANCE = 50
 LABEL_WIDTH = 80
 LABEL_HEIGHT = 30
 LABEL_LINE_THICKNESS = 2
-FONT = "Waree-BoldOblique.ttf"
+FONT = "Lato-BoldItalic.ttf"
 
 
 class hri_visualizer:
