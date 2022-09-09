@@ -12,11 +12,13 @@
 import rospy
 from hri_msgs.msg import IdsList
 from sensor_msgs.msg import Image, RegionOfInterest, CompressedImage
+from std_msgs.msg import String
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
 from PIL import ImageFont, ImageDraw
 from PIL import Image as PILImage
+from knowledge_core.srv import Query
 
 BLUE = (255, 220, 0)
 WHITE = (255, 255, 255)
@@ -25,6 +27,7 @@ THICKNESS_CORNERS = 3
 LABEL_DISTANCE = 50
 LABEL_WIDTH = 80
 LABEL_HEIGHT = 30
+SPACE_PER_CHARACTER = 14
 LABEL_LINE_THICKNESS = 2
 FONT = "Lato-BoldItalic.ttf"
 
@@ -35,10 +38,17 @@ class hri_visualizer:
 				 compressed_output):
 		""" Constructor """
 
+		self.font = self.calibrate_font_size(5)
+
 		self.face_sub = rospy.Subscriber("/humans/faces/tracked",
 										 IdsList,
 										 self.face_cb,
 										 queue_size=1)
+
+		self.persons_sub = rospy.Subscriber("/humans/persons/tracked",
+										 	IdsList,
+										 	self.persons_cb,
+										 	queue_size=1)
 
 		self.img_cb = rospy.Subscriber("/image",
 									   Image,
@@ -59,13 +69,15 @@ class hri_visualizer:
 		self.bridge = CvBridge()
 		
 		self.faces = {}
+		self.persons = {}
 
-		self.calibrate_font_size()
+		self.kb_query_srv = rospy.ServiceProxy("/kb/query", Query)
+
 
 
 	def face_cb(self, msg):
 		""" Callback managing the list of face ids
-			published. It stores the ids in a list """
+			published  """
 
 		for id in msg.ids:
 			if not id in list(self.faces):
@@ -74,7 +86,10 @@ class hri_visualizer:
 												   self.roi_cb, 
 												   (id)),
 								  None,
-								  None]
+								  None,
+								  None, # Nickname
+								  None, # Label sizing
+								  None] # Font
 
 		for id in list(self.faces):
 			if not id in msg.ids:
@@ -90,6 +105,54 @@ class hri_visualizer:
 		face_id = args
 		self.faces[face_id][1] = msg
 
+	def persons_cb(self, msg):
+		""" Callback managing the list of 
+			published person ids """
+
+		keep_retrieving = True
+
+		for id in msg.ids:
+			if not id in list(self.persons):
+				print('hola')
+				nickname = self.retrieve_nickname(id)
+				self.persons[id] = rospy.Subscriber("/humans/persons/"+id+"/face_id",
+													String,
+													self.person_face_cb,
+													(nickname, id, keep_retrieving))
+
+	def person_face_cb(self, msg, args):
+		""" callback used to assign a name to each face """
+
+		nickname = args[0]
+
+		if args[2] and (args[0] == args[1]):
+			nickname = self.retrieve_nickname(args[1])
+
+		if msg.data in list(self.faces):
+			self.faces[msg.data][3] = nickname
+		
+
+	def retrieve_nickname(self, id):
+		""" It is possible to visualize the faces
+		    identified either by their person id or
+		    by their nickname. This function retrieves
+		    a person's nickname from the knowledge base """
+
+		# The query to perform. In this format, we're looking
+		# for the name of a person whose person_id is id
+		query = id + " hasName ?name"
+		# The variable we're interested in from the queried
+		# triples. In this case, we're only interested in 
+		# the person's nickname
+		var = "?name"
+		# The model we're querying. Empty = default model
+		model = ""
+
+		nickname = self.kb_query_srv([query], [var], [model])
+		if nickname.json == "[]":
+			return id
+		else:
+			return (eval(nickname.json))[0]["name"]
 
 	def img_cb(self, msg):
 		""" Callback managing the incoming images. 
@@ -103,6 +166,24 @@ class hri_visualizer:
 		for id in list(self.faces):
 			face = self.faces[id]
 			if face[1]:
+
+				# Label sizing calibration
+				# Two possible cases:
+				# 1. The id is a 5 characters string
+				# 2. The id is a nickname with a variable sizing
+
+				label_width = LABEL_WIDTH
+				font = self.font
+
+				if not face[4] and face[3] and (len(face[3]) != 5):
+					# calibration needed
+					face[4] = SPACE_PER_CHARACTER*len(face[3])
+					face[5] = self.calibrate_font_size(len(face[3]))
+
+				if face[4]:
+					label_width = face[4]
+					font = face[5]
+
 				starting_point = (face[1].x_offset, face[1].y_offset)
 				ending_point = (face[1].x_offset + face[1].width, 
 								face[1].y_offset + face[1].height)
@@ -159,9 +240,9 @@ class hri_visualizer:
 								+ (corner_to_corner/np.linalg.norm(corner_to_corner, 2))*LABEL_DISTANCE
 				distance = np.sqrt((roi_corner[0]-face[2][0])**2+
 								   (roi_corner[1]-face[2][1])**2)
-				if(distance < (LABEL_DISTANCE + np.sqrt(LABEL_WIDTH**2 + LABEL_HEIGHT**2))\
-					or (label_corner[0] - LABEL_WIDTH < 0)\
-					or (label_corner[0] + LABEL_WIDTH > msg.width)\
+				if(distance < (LABEL_DISTANCE + np.sqrt(label_width**2 + LABEL_HEIGHT**2))\
+					or (label_corner[0] - label_width < 0)\
+					or (label_corner[0] + label_width > msg.width)\
 					or (label_corner[1] - LABEL_HEIGHT < 0)\
 					or (label_corner[1] + LABEL_HEIGHT > msg.height)):
 					further_corner = self.find_max_distance_corner(face[1].x_offset+face[1].width/2,
@@ -188,9 +269,9 @@ class hri_visualizer:
 				roi_corner_opposite = self.encode_opposite_corner(face[2][0], face[2][1])
 				if roi_corner_opposite[0] == 0:
 					label_top_left_x = label_corner[0]
-					label_bottom_right_x = label_corner[0] + LABEL_WIDTH
+					label_bottom_right_x = label_corner[0] + label_width
 				else:
-					label_top_left_x = label_corner[0] - LABEL_WIDTH
+					label_top_left_x = label_corner[0] - label_width
 					label_bottom_right_x = label_corner[0]
 				if roi_corner_opposite[1] == 0:
 					label_top_left_y = label_corner[1]
@@ -207,9 +288,12 @@ class hri_visualizer:
 							        BLUE,
 							        -1,
 							        lineType=cv2.LINE_AA)
-
-				text_width, text_height = self.font.getsize(id)
-				text_top_left = [label_top_left_x + (LABEL_WIDTH-text_width)/2, 
+				if not face[3]:
+					text_width, text_height = font.getsize(id)
+				else:
+					text_width, text_height = font.getsize(face[3])
+				
+				text_top_left = [label_top_left_x + (label_width-text_width)/2, 
 									label_top_left_y + (LABEL_HEIGHT-text_height)/2]
 				text_top_left = np.array(text_top_left, dtype=int)
 
@@ -217,7 +301,10 @@ class hri_visualizer:
 				pil_img = PILImage.fromarray(rgb_img)
 
 				draw = ImageDraw.Draw(pil_img)
-				draw.text(text_top_left, id, font=self.font)
+				if face[3]:
+					draw.text(text_top_left, face[3], font=self.font)
+				else:
+					draw.text(text_top_left, id, font=self.font)	
 
 				img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
@@ -248,22 +335,23 @@ class hri_visualizer:
 
 		return [int(not bool(corner_x)), int(not bool(corner_y))]
 
-	def calibrate_font_size(self):
+	def calibrate_font_size(self, number_of_letters):
 		""" Initial calibration of the font size
 			for the ids label. It uses PIL tools,
 			not opencv tools """
 
 		self.fontsize = 1
-		label = "wwwww"
+		label = "w"*number_of_letters
+		label_width = SPACE_PER_CHARACTER*number_of_letters
 		font = ImageFont.truetype(FONT, self.fontsize)
 		text_width, text_height = font.getsize(label)
-		while text_width < (LABEL_WIDTH - 10)\
+		while text_width < (label_width - 10)\
 		  and text_height < (LABEL_HEIGHT - 6):
 		  	self.fontsize += 1
 		  	font = ImageFont.truetype(FONT, self.fontsize)
 		  	text_size, text_height = font.getsize(label)
 		self.fontsize -= 1
-		self.font = ImageFont.truetype(FONT, self.fontsize)
+		return ImageFont.truetype(FONT, self.fontsize)
 
 
 if __name__=="__main__":
