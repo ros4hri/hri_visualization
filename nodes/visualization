@@ -113,7 +113,6 @@ class hri_visualizer:
 
 		for id in msg.ids:
 			if not id in list(self.persons):
-				print('hola')
 				nickname = self.retrieve_nickname(id)
 				self.persons[id] = rospy.Subscriber("/humans/persons/"+id+"/face_id",
 													String,
