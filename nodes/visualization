@@ -139,7 +139,7 @@ class hri_visualizer:
 
 		# The query to perform. In this format, we're looking
 		# for the name of a person whose person_id is id
-		query = id + " hasName ?name"
+		query = id + " preferredName ?name"
 		# The variable we're interested in from the queried
 		# triples. In this case, we're only interested in 
 		# the person's nickname
