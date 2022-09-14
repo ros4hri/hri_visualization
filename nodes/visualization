@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 from PIL import ImageFont, ImageDraw
 from PIL import Image as PILImage
-from knowledge_core.srv import Query
+from knowledge_core.srv import Query, Event
 
 BLUE = (255, 220, 0)
 WHITE = (255, 255, 255)
@@ -81,6 +81,8 @@ class hri_visualizer:
 		self.persons = {}
 
 		self.kb_query_srv = rospy.ServiceProxy("/kb/query", Query)
+		self.kb_event_srv = rospy.ServiceProxy("/kb/events", Event)
+
 
 	def face_cb(self, msg):
 		""" Callback managing the list of face ids
@@ -116,27 +118,51 @@ class hri_visualizer:
 		""" Callback managing the list of 
 			published person ids """
 
-		keep_retrieving = True
+		debugging = False
 
 		for id in msg.ids:
 			if not id in list(self.persons):
 				nickname = self.retrieve_nickname(id)
-				self.persons[id] = rospy.Subscriber("/humans/persons/"+id+"/face_id",
+				self.persons[id] = [rospy.Subscriber("/humans/persons/"+id+"/face_id",
 													String,
 													self.person_face_cb,
-													(nickname, id, keep_retrieving))
+													(nickname, id, debugging)),
+									None, # Current face_id
+									None] # Initially empty space that could be used to
+										  # allocate a subscriber to update a person's name,
+										  # using the knowledge_core event support
 
 	def person_face_cb(self, msg, args):
 		""" callback used to assign a name to each face """
 
 		nickname = args[0]
+		self.persons[args[1]][1] = msg.data
 
-		if args[2] and (args[0] == args[1]):
+		if args[0] == args[1]:
 			nickname = self.retrieve_nickname(args[1])
+			pattern =  args[1] + " hasName ?name"
+			one_shot = False
+			models = ""
+			if not self.persons[args[1]][2]: 
+				event_topic_info = self.kb_event_srv([pattern], one_shot, [models])
+				self.persons[args[1]][2] = rospy.Subscriber(event_topic_info.topic,
+															String,
+															self.nickname_update_cb,
+															(args[1]))
+			if not args[2]:
+				nickname = "unknown"
 
 		if msg.data in list(self.faces):
 			self.faces[msg.data][3] = nickname
+
+	def nickname_update_cb(self, msg, args):
+		""" callback managing nickname updates when no nickname 
+			is initially found """
 		
+		nickname = (eval(msg.data))[0]["name"]
+		print("New nickname found: ", nickname)
+		face_id = self.persons[args][1]
+		self.faces[face_id][3] = nickname
 
 	def retrieve_nickname(self, id):
 		""" It is possible to visualize the faces
@@ -172,6 +198,8 @@ class hri_visualizer:
 		for id in list(self.faces):
 			face = self.faces[id]
 			if face[1]:
+
+				print(face[3])
 
 				# Label sizing calibration
 				# Two possible cases:
