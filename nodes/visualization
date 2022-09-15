@@ -38,6 +38,8 @@ class hri_visualizer:
 				 compressed_output):
 		""" Constructor """
 
+		self.debugging = False
+
 		self.font = self.calibrate_font_size(5)
 
 		self.face_sub = rospy.Subscriber("/humans/faces/tracked",
@@ -118,19 +120,28 @@ class hri_visualizer:
 		""" Callback managing the list of 
 			published person ids """
 
-		debugging = False
-
 		for id in msg.ids:
 			if not id in list(self.persons):
 				nickname = self.retrieve_nickname(id)
 				self.persons[id] = [rospy.Subscriber("/humans/persons/"+id+"/face_id",
 													String,
 													self.person_face_cb,
-													(nickname, id, debugging)),
+													(nickname, id, self.debugging)),
 									None, # Current face_id
 									None] # Initially empty space that could be used to
 										  # allocate a subscriber to update a person's name,
 										  # using the knowledge_core event support
+
+		for id in list(self.persons):
+			if not id in msg.ids:
+				face_id = self.persons[id][1]
+				if face_id in list(self.faces):
+					self.faces[face_id][3] = None
+				if self.persons[id][0]:
+					self.persons[id][0].unregister()
+				if self.persons[id][2]:
+					self.persons[id][2].unregister()
+				del self.persons[id]
 
 	def person_face_cb(self, msg, args):
 		""" callback used to assign a name to each face """
@@ -140,7 +151,7 @@ class hri_visualizer:
 
 		if args[0] == args[1]:
 			nickname = self.retrieve_nickname(args[1])
-			pattern =  args[1] + " hasName ?name"
+			pattern =  args[1] + " preferredName ?name"
 			one_shot = False
 			models = ""
 			if not self.persons[args[1]][2]: 
@@ -149,7 +160,7 @@ class hri_visualizer:
 															String,
 															self.nickname_update_cb,
 															(args[1]))
-			if not args[2]:
+			if (not args[2]) and (nickname == args[1]):
 				nickname = "unknown"
 
 		if msg.data in list(self.faces):
@@ -162,7 +173,8 @@ class hri_visualizer:
 		nickname = (eval(msg.data))[0]["name"]
 		print("New nickname found: ", nickname)
 		face_id = self.persons[args][1]
-		self.faces[face_id][3] = nickname
+		if face_id in list(self.faces):
+			self.faces[face_id][3] = nickname
 
 	def retrieve_nickname(self, id):
 		""" It is possible to visualize the faces
