@@ -57,12 +57,21 @@ class hri_visualizer:
 
 		self.compressed_output = compressed_output
 
+		remappings = rospy.names.get_mappings()
+		remapped_topic = remappings["/image"]
+		if remapped_topic.endswith("/image_raw"):
+			fixed_name_length = len(remapped_topic)-len("image_raw")
+			hri_overlay_topic = remapped_topic[:fixed_name_length]\
+								 + "hri_overlay"
+		else:
+			hri_overlay_topic = remapped_topic+"/hri_overlay"
+
 		if compressed_output:
-			self.img_pub = rospy.Publisher("/visualization/compressed",
+			self.img_pub = rospy.Publisher(hri_overlay_topic+"/compressed",
 										   CompressedImage,
 										   queue_size=1)
 		else:
-			self.img_pub = rospy.Publisher("/visualization",
+			self.img_pub = rospy.Publisher(hri_overlay_topic,
 										   Image,
 										   queue_size=1)
 
@@ -72,8 +81,6 @@ class hri_visualizer:
 		self.persons = {}
 
 		self.kb_query_srv = rospy.ServiceProxy("/kb/query", Query)
-
-
 
 	def face_cb(self, msg):
 		""" Callback managing the list of face ids
