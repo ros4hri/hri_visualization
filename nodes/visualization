@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 
-# Things to do:
-#	- pep8 the code
-#	- using PIL for text, with futura font
-#	- animate the label movement, in a "bubbly way"
-#		(a little bit of overshoot/undershoot in the label
-#		 movement)
-#	- doing the same we're doing for faces with bodies and skeletons
-#	- using parameters
-
 import rospy
-from hri_msgs.msg import IdsList
+from hri_msgs.msg import IdsList, Skeleton2D
 from sensor_msgs.msg import Image, RegionOfInterest, CompressedImage
 from std_msgs.msg import String
 from cv_bridge import CvBridge
@@ -29,8 +20,26 @@ LABEL_WIDTH = 80
 LABEL_HEIGHT = 30
 SPACE_PER_CHARACTER = 14
 LABEL_LINE_THICKNESS = 2
+JOINT_RADIUS = 15
+JOINT_THICKNESS = -1
 FONT = "Lato-BoldItalic.ttf"
 
+# 2D skeleton joints
+# related to face keypoints won't be
+# drawn
+joints_to_draw = [Skeleton2D.NECK,
+				  Skeleton2D.RIGHT_SHOULDER,
+				  Skeleton2D.RIGHT_ELBOW,
+				  Skeleton2D.RIGHT_WRIST,
+				  Skeleton2D.LEFT_SHOULDER,
+				  Skeleton2D.LEFT_ELBOW,
+				  Skeleton2D.LEFT_WRIST,
+				  Skeleton2D.RIGHT_HIP,
+				  Skeleton2D.RIGHT_KNEE,
+				  Skeleton2D.RIGHT_ANKLE,
+				  Skeleton2D.LEFT_HIP,
+				  Skeleton2D.LEFT_KNEE,
+				  Skeleton2D.LEFT_ANKLE]
 
 class hri_visualizer:
 
@@ -45,6 +54,11 @@ class hri_visualizer:
 		self.face_sub = rospy.Subscriber("/humans/faces/tracked",
 										 IdsList,
 										 self.face_cb,
+										 queue_size=1)
+
+		self.body_sub = rospy.Subscriber("/humans/bodies/tracked",
+										 IdsList,
+										 self.body_cb,
 										 queue_size=1)
 
 		self.persons_sub = rospy.Subscriber("/humans/persons/tracked",
@@ -80,6 +94,7 @@ class hri_visualizer:
 		self.bridge = CvBridge()
 		
 		self.faces = {}
+		self.bodies = {}
 		self.persons = {}
 
 		self.kb_query_srv = rospy.ServiceProxy("/kb/query", Query)
@@ -198,6 +213,33 @@ class hri_visualizer:
 		else:
 			return (eval(nickname.json))[0]["name"]
 
+	def body_cb(self, msg):
+		""" Callback storing information regarding the
+			detected bodies """
+
+		for id in msg.ids:
+			if not id in list(self.bodies):
+				skeleton_topic = "/humans/bodies/"+id+"/skeleton2d"
+				self.bodies[id] = [rospy.Subscriber(skeleton_topic,
+													Skeleton2D,
+													self.skeleton_cb,
+													(id),
+													queue_size=1),
+								   None]
+
+		for id in list(self.bodies):
+			if not id in msg.ids:
+				self.bodies[id][0].unregister()
+				del self.bodies[id]
+
+	def skeleton_cb(self, skeleton_msg, args):
+		""" callback to store information regarding
+			a bodies skeleton coordinates """
+		
+		id = args
+		self.bodies[id][1] = skeleton_msg.skeleton
+
+
 	def img_cb(self, msg):
 		""" Callback managing the incoming images. 
 			It draws the bounding boxes for the 
@@ -207,11 +249,10 @@ class hri_visualizer:
 		max_distance = np.sqrt(msg.height**2 + msg.width**2)
 
 		img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+		(height, width, _) = img.shape
 		for id in list(self.faces):
 			face = self.faces[id]
 			if face[1]:
-
-				print(face[3])
 
 				# Label sizing calibration
 				# Two possible cases:
@@ -353,6 +394,52 @@ class hri_visualizer:
 					draw.text(text_top_left, id, font=self.font)	
 
 				img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+		for id in list(self.bodies):
+			skeleton = self.bodies[id][1]
+			if skeleton:
+				upper_chain = [skeleton[Skeleton2D.RIGHT_WRIST],
+							   skeleton[Skeleton2D.RIGHT_ELBOW],
+							   skeleton[Skeleton2D.RIGHT_SHOULDER],
+							   skeleton[Skeleton2D.NECK],
+							   skeleton[Skeleton2D.LEFT_SHOULDER],
+							   skeleton[Skeleton2D.LEFT_ELBOW],
+							   skeleton[Skeleton2D.LEFT_WRIST]]
+
+				body = [skeleton[Skeleton2D.LEFT_SHOULDER],
+						skeleton[Skeleton2D.LEFT_HIP],
+						skeleton[Skeleton2D.RIGHT_HIP],
+						skeleton[Skeleton2D.RIGHT_SHOULDER]]
+
+				left_leg = [skeleton[Skeleton2D.LEFT_HIP],
+							skeleton[Skeleton2D.LEFT_KNEE],
+							skeleton[Skeleton2D.LEFT_ANKLE]]
+
+				right_leg = [skeleton[Skeleton2D.RIGHT_HIP],
+							 skeleton[Skeleton2D.RIGHT_KNEE],
+							 skeleton[Skeleton2D.RIGHT_ANKLE]]
+
+				skeleton_lines_segments = [upper_chain,
+										   body,
+										   left_leg,
+										   right_leg]
+
+				for joint in joints_to_draw:
+					joint_x = int(skeleton[joint].x*width)
+					joint_y = int(skeleton[joint].y*height)
+					img = cv2.circle(img, (joint_x, joint_y), JOINT_RADIUS, BLUE, JOINT_THICKNESS)
+
+				for idx, segment in enumerate(skeleton_lines_segments):
+					segment = [(int(joint.x*width), int(joint.y*height)) for joint in segment]
+					segment = np.array(segment, dtype=np.int32)
+					skeleton_lines_segments[idx] = segment
+
+				img = cv2.polylines(img, 
+					                skeleton_lines_segments, 
+					                isClosed=False,
+					                color=BLUE,
+					                thickness=THICKNESS_CORNERS,
+					                lineType=cv2.LINE_AA)
 
 		if self.compressed_output:
 			img_msg = CompressedImage()
