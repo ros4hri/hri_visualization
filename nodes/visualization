@@ -11,6 +11,7 @@ from PIL import ImageFont, ImageDraw
 from PIL import Image as PILImage
 from knowledge_core.srv import Query, Event
 
+# Drawing parameters definition
 BLUE = (255, 220, 0)
 WHITE = (255, 255, 255)
 THICKNESS = 5
@@ -25,475 +26,570 @@ JOINT_THICKNESS = -1
 FONT = "Lato-BoldItalic.ttf"
 
 # 2D skeleton joints
-# related to face keypoints won't be
-# drawn
+# related to face keypoints won't be drawn
 joints_to_draw = [Skeleton2D.NECK,
-				  Skeleton2D.RIGHT_SHOULDER,
-				  Skeleton2D.RIGHT_ELBOW,
-				  Skeleton2D.RIGHT_WRIST,
-				  Skeleton2D.LEFT_SHOULDER,
-				  Skeleton2D.LEFT_ELBOW,
-				  Skeleton2D.LEFT_WRIST,
-				  Skeleton2D.RIGHT_HIP,
-				  Skeleton2D.RIGHT_KNEE,
-				  Skeleton2D.RIGHT_ANKLE,
-				  Skeleton2D.LEFT_HIP,
-				  Skeleton2D.LEFT_KNEE,
-				  Skeleton2D.LEFT_ANKLE]
+                  Skeleton2D.RIGHT_SHOULDER,
+                  Skeleton2D.RIGHT_ELBOW,
+                  Skeleton2D.RIGHT_WRIST,
+                  Skeleton2D.LEFT_SHOULDER,
+                  Skeleton2D.LEFT_ELBOW,
+                  Skeleton2D.LEFT_WRIST,
+                  Skeleton2D.RIGHT_HIP,
+                  Skeleton2D.RIGHT_KNEE,
+                  Skeleton2D.RIGHT_ANKLE,
+                  Skeleton2D.LEFT_HIP,
+                  Skeleton2D.LEFT_KNEE,
+                  Skeleton2D.LEFT_ANKLE]
+
 
 class hri_visualizer:
 
-	def __init__(self, 
-				 compressed_output):
-		""" Constructor """
-
-		self.debugging = False
-
-		self.font = self.calibrate_font_size(5)
-
-		self.face_sub = rospy.Subscriber("/humans/faces/tracked",
-										 IdsList,
-										 self.face_cb,
-										 queue_size=1)
-
-		self.body_sub = rospy.Subscriber("/humans/bodies/tracked",
-										 IdsList,
-										 self.body_cb,
-										 queue_size=1)
-
-		self.persons_sub = rospy.Subscriber("/humans/persons/tracked",
-										 	IdsList,
-										 	self.persons_cb,
-										 	queue_size=1)
-
-		self.img_cb = rospy.Subscriber("/image",
-									   Image,
-									   self.img_cb,
-									   queue_size=1)
-
-		self.compressed_output = compressed_output
-
-		remappings = rospy.names.get_mappings()
-		remapped_topic = remappings["image"]
-		if remapped_topic.endswith("/image_raw"):
-			fixed_name_length = len(remapped_topic)-len("image_raw")
-			hri_overlay_topic = remapped_topic[:fixed_name_length]\
-								 + "hri_overlay"
-		else:
-			hri_overlay_topic = remapped_topic+"/hri_overlay"
-
-		if compressed_output:
-			self.img_pub = rospy.Publisher(hri_overlay_topic+"/compressed",
-										   CompressedImage,
-										   queue_size=1)
-		else:
-			self.img_pub = rospy.Publisher(hri_overlay_topic,
-										   Image,
-										   queue_size=1)
-
-		self.bridge = CvBridge()
-		
-		self.faces = {}
-		self.bodies = {}
-		self.persons = {}
-
-		self.kb_query_srv = rospy.ServiceProxy("/kb/query", Query)
-		self.kb_event_srv = rospy.ServiceProxy("/kb/events", Event)
-
-
-	def face_cb(self, msg):
-		""" Callback managing the list of face ids
-			published  """
-
-		for id in msg.ids:
-			if not id in list(self.faces):
-				self.faces[id] = [rospy.Subscriber("/humans/faces/"+id+"/roi", 
-												   RegionOfInterest, 
-												   self.roi_cb, 
-												   (id)),
-								  None,
-								  None,
-								  None, # Nickname
-								  None, # Label sizing
-								  None] # Font
-
-		for id in list(self.faces):
-			if not id in msg.ids:
-				self.faces[id][0].unregister()
-				del self.faces[id]
-
-
-	def roi_cb(self, msg, args):
-		""" Callback managing the rois.
-			It stores the face ids
-			and their rois. """
-
-		face_id = args
-		self.faces[face_id][1] = msg
-
-	def persons_cb(self, msg):
-		""" Callback managing the list of 
-			published person ids """
-
-		for id in msg.ids:
-			if not id in list(self.persons):
-				nickname = self.retrieve_nickname(id)
-				self.persons[id] = [rospy.Subscriber("/humans/persons/"+id+"/face_id",
-													String,
-													self.person_face_cb,
-													(nickname, id, self.debugging)),
-									None, # Current face_id
-									None] # Initially empty space that could be used to
-										  # allocate a subscriber to update a person's name,
-										  # using the knowledge_core event support
-
-		for id in list(self.persons):
-			if not id in msg.ids:
-				face_id = self.persons[id][1]
-				if face_id in list(self.faces):
-					self.faces[face_id][3] = None
-				if self.persons[id][0]:
-					self.persons[id][0].unregister()
-				if self.persons[id][2]:
-					self.persons[id][2].unregister()
-				del self.persons[id]
-
-	def person_face_cb(self, msg, args):
-		""" callback used to assign a name to each face """
-
-		nickname = args[0]
-		self.persons[args[1]][1] = msg.data
-
-		if args[0] == args[1]:
-			nickname = self.retrieve_nickname(args[1])
-			pattern =  args[1] + " preferredName ?name"
-			one_shot = False
-			models = ""
-			if not self.persons[args[1]][2]: 
-				event_topic_info = self.kb_event_srv([pattern], one_shot, [models])
-				self.persons[args[1]][2] = rospy.Subscriber(event_topic_info.topic,
-															String,
-															self.nickname_update_cb,
-															(args[1]))
-			if (not args[2]) and (nickname == args[1]):
-				nickname = "unknown"
-
-		if msg.data in list(self.faces):
-			self.faces[msg.data][3] = nickname
-
-	def nickname_update_cb(self, msg, args):
-		""" callback managing nickname updates when no nickname 
-			is initially found """
-		
-		nickname = (eval(msg.data))[0]["name"]
-		print("New nickname found: ", nickname)
-		face_id = self.persons[args][1]
-		if face_id in list(self.faces):
-			self.faces[face_id][3] = nickname
-
-	def retrieve_nickname(self, id):
-		""" It is possible to visualize the faces
-		    identified either by their person id or
-		    by their nickname. This function retrieves
-		    a person's nickname from the knowledge base """
-
-		# The query to perform. In this format, we're looking
-		# for the name of a person whose person_id is id
-		query = id + " preferredName ?name"
-		# The variable we're interested in from the queried
-		# triples. In this case, we're only interested in 
-		# the person's nickname
-		var = "?name"
-		# The model we're querying. Empty = default model
-		model = ""
-
-		nickname = self.kb_query_srv([query], [var], [model])
-		if nickname.json == "[]":
-			return id
-		else:
-			return (eval(nickname.json))[0]["name"]
-
-	def body_cb(self, msg):
-		""" Callback storing information regarding the
-			detected bodies """
-
-		for id in msg.ids:
-			if not id in list(self.bodies):
-				skeleton_topic = "/humans/bodies/"+id+"/skeleton2d"
-				self.bodies[id] = [rospy.Subscriber(skeleton_topic,
-													Skeleton2D,
-													self.skeleton_cb,
-													(id),
-													queue_size=1),
-								   None]
-
-		for id in list(self.bodies):
-			if not id in msg.ids:
-				self.bodies[id][0].unregister()
-				del self.bodies[id]
-
-	def skeleton_cb(self, skeleton_msg, args):
-		""" callback to store information regarding
-			a bodies skeleton coordinates """
-		
-		id = args
-		self.bodies[id][1] = skeleton_msg.skeleton
-
-
-	def img_cb(self, msg):
-		""" Callback managing the incoming images. 
-			It draws the bounding boxes for the 
-			detected components """
-
-		# max distance of a point from the furthest corner
-		max_distance = np.sqrt(msg.height**2 + msg.width**2)
-
-		img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-		(height, width, _) = img.shape
-		for id in list(self.faces):
-			face = self.faces[id]
-			if face[1]:
-
-				# Label sizing calibration
-				# Two possible cases:
-				# 1. The id is a 5 characters string
-				# 2. The id is a nickname with a variable sizing
-
-				label_width = LABEL_WIDTH
-				font = self.font
-
-				if not face[4] and face[3] and (len(face[3]) != 5):
-					# calibration needed
-					face[4] = SPACE_PER_CHARACTER*len(face[3])
-					face[5] = self.calibrate_font_size(len(face[3]))
-
-				if face[4]:
-					label_width = face[4]
-					font = face[5]
-
-				starting_point = (face[1].x_offset, face[1].y_offset)
-				ending_point = (face[1].x_offset + face[1].width, 
-								face[1].y_offset + face[1].height)
-				img = cv2.rectangle(img, 
-									starting_point, 
-									ending_point, 
-									BLUE, 
-									THICKNESS,
-									lineType=cv2.LINE_AA)
-				# sizing the height/width of the localisation corners
-				visualization_corners_width = int(face[1].width/10)
-				visualization_corners_height = int(face[1].height/10)
-				ptsTopLeft = np.array([[face[1].x_offset+max(10, visualization_corners_width), face[1].y_offset+(2*visualization_corners_height)],
-							  		   [face[1].x_offset+max(10, visualization_corners_width), face[1].y_offset+max(10, visualization_corners_height)],
-							  		   [face[1].x_offset+(2*visualization_corners_width), face[1].y_offset+max(10, visualization_corners_height)]],
-							  		   dtype=np.int32)
-				ptsBottomLeft = np.array([[face[1].x_offset+max(10, visualization_corners_width), face[1].y_offset+face[1].height-(2*visualization_corners_height)],
-							  		   	  [face[1].x_offset+max(10, visualization_corners_width), face[1].y_offset+face[1].height-max(10, visualization_corners_height)],
-							  		   	  [face[1].x_offset+(2*visualization_corners_width), face[1].y_offset+face[1].height-max(10, visualization_corners_height)]],
-							  		   	  dtype=np.int32)
-				ptsBottomRight = np.array([[face[1].x_offset+face[1].width-(2*visualization_corners_width), face[1].y_offset+face[1].height-max(10, visualization_corners_height)],
-							  		   	   [face[1].x_offset+face[1].width-max(10, visualization_corners_width), face[1].y_offset+face[1].height-max(10, visualization_corners_height)],
-							  		   	   [face[1].x_offset+face[1].width-max(10, visualization_corners_width), face[1].y_offset+face[1].height-(2*visualization_corners_height)]],
-							  		   	   dtype=np.int32)
-				ptsTopRight = np.array([[face[1].x_offset+face[1].width-(2*visualization_corners_width), face[1].y_offset+max(10, visualization_corners_height)],
-							  		   	[face[1].x_offset+face[1].width-max(10, visualization_corners_width), face[1].y_offset+max(10, visualization_corners_height)],
-							  		   	[face[1].x_offset+face[1].width-max(10, visualization_corners_width), face[1].y_offset+(2*visualization_corners_height)]],
-							  		   	dtype=np.int32)
-
-				img = cv2.polylines(img, 
-					                [ptsTopLeft, ptsBottomLeft, ptsBottomRight, ptsTopRight], 
-					                isClosed=False,
-					                color=BLUE,
-					                thickness=THICKNESS_CORNERS,
-					                lineType=cv2.LINE_AA)
-
-				# Now inserting the label.
-				# Step 1: checking if a label point already exists.
-				# If this is not the case, selecting the further point
-				# the corners of the image.
-				if not face[2]:
-					further_corner = self.find_max_distance_corner(face[1].x_offset+face[1].width/2,
-																   face[1].y_offset+face[1].height/2,
-																   msg.width,
-																   msg.height)
-					face[2] = [further_corner[0]*msg.width, further_corner[1]*msg.height]
-				# Step 2: if the corner has already been computed,
-				# it will remain the same as long as the label would
-				# be outside of the image.
-				roi_corner = np.array([face[1].x_offset+(face[2][0]/msg.width*face[1].width),
-									   face[1].y_offset+(face[2][1]/msg.height*face[1].height)])
-				corner_to_corner = np.array(face[2]) - roi_corner
-				label_corner = roi_corner \
-								+ (corner_to_corner/np.linalg.norm(corner_to_corner, 2))*LABEL_DISTANCE
-				distance = np.sqrt((roi_corner[0]-face[2][0])**2+
-								   (roi_corner[1]-face[2][1])**2)
-				if(distance < (LABEL_DISTANCE + np.sqrt(label_width**2 + LABEL_HEIGHT**2))\
-					or (label_corner[0] - label_width < 0)\
-					or (label_corner[0] + label_width > msg.width)\
-					or (label_corner[1] - LABEL_HEIGHT < 0)\
-					or (label_corner[1] + LABEL_HEIGHT > msg.height)):
-					further_corner = self.find_max_distance_corner(face[1].x_offset+face[1].width/2,
-															   face[1].y_offset+face[1].height/2,
-															   msg.width,
-															   msg.height)
-					face[2] = [further_corner[0]*msg.width, further_corner[1]*msg.height]
-					roi_corner = np.array([face[1].x_offset+(face[2][0]/msg.width*face[1].width),
-									   face[1].y_offset+(face[2][1]/msg.height*face[1].height)])
-					corner_to_corner = np.array(face[2]) - roi_corner
-					label_corner = roi_corner \
-									+ (corner_to_corner/np.linalg.norm(corner_to_corner, 2))*LABEL_DISTANCE
-
-				# Step 3: at this point the face should have assigned a far enough 
-				# corner point. It's time to print the label
-				roi_corner = np.array(roi_corner, dtype=int)
-				label_corner = np.array(label_corner, dtype=int)
-				img = cv2.line(img, 
-							   roi_corner, 
-							   label_corner, 
-							   color=BLUE, 
-							   thickness=LABEL_LINE_THICKNESS,
-							   lineType=cv2.LINE_AA)
-				roi_corner_opposite = self.encode_opposite_corner(face[2][0], face[2][1])
-				if roi_corner_opposite[0] == 0:
-					label_top_left_x = label_corner[0]
-					label_bottom_right_x = label_corner[0] + label_width
-				else:
-					label_top_left_x = label_corner[0] - label_width
-					label_bottom_right_x = label_corner[0]
-				if roi_corner_opposite[1] == 0:
-					label_top_left_y = label_corner[1]
-					label_bottom_right_y = label_corner[1] + LABEL_HEIGHT
-				else:
-					label_top_left_y = label_corner[1] - LABEL_HEIGHT
-					label_bottom_right_y = label_corner[1]
-
-				text_bottom_left = [label_top_left_x + 5, label_bottom_right_y - 3]
-
-				img = cv2.rectangle(img,
-							   	    [label_top_left_x, label_top_left_y],
-							        [label_bottom_right_x, label_bottom_right_y],
-							        BLUE,
-							        -1,
-							        lineType=cv2.LINE_AA)
-				if not face[3]:
-					text_width, text_height = font.getsize(id)
-				else:
-					text_width, text_height = font.getsize(face[3])
-				
-				text_top_left = [label_top_left_x + (label_width-text_width)/2, 
-									label_top_left_y + (LABEL_HEIGHT-text_height)/2]
-				text_top_left = np.array(text_top_left, dtype=int)
-
-				rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-				pil_img = PILImage.fromarray(rgb_img)
-
-				draw = ImageDraw.Draw(pil_img)
-				if face[3]:
-					draw.text(text_top_left, face[3], font=self.font)
-				else:
-					draw.text(text_top_left, id, font=self.font)	
-
-				img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-
-		for id in list(self.bodies):
-			skeleton = self.bodies[id][1]
-			if skeleton:
-				upper_chain = [skeleton[Skeleton2D.RIGHT_WRIST],
-							   skeleton[Skeleton2D.RIGHT_ELBOW],
-							   skeleton[Skeleton2D.RIGHT_SHOULDER],
-							   skeleton[Skeleton2D.NECK],
-							   skeleton[Skeleton2D.LEFT_SHOULDER],
-							   skeleton[Skeleton2D.LEFT_ELBOW],
-							   skeleton[Skeleton2D.LEFT_WRIST]]
-
-				body = [skeleton[Skeleton2D.LEFT_SHOULDER],
-						skeleton[Skeleton2D.LEFT_HIP],
-						skeleton[Skeleton2D.RIGHT_HIP],
-						skeleton[Skeleton2D.RIGHT_SHOULDER]]
-
-				left_leg = [skeleton[Skeleton2D.LEFT_HIP],
-							skeleton[Skeleton2D.LEFT_KNEE],
-							skeleton[Skeleton2D.LEFT_ANKLE]]
-
-				right_leg = [skeleton[Skeleton2D.RIGHT_HIP],
-							 skeleton[Skeleton2D.RIGHT_KNEE],
-							 skeleton[Skeleton2D.RIGHT_ANKLE]]
-
-				skeleton_lines_segments = [upper_chain,
-										   body,
-										   left_leg,
-										   right_leg]
-
-				for joint in joints_to_draw:
-					joint_x = int(skeleton[joint].x*width)
-					joint_y = int(skeleton[joint].y*height)
-					img = cv2.circle(img, (joint_x, joint_y), JOINT_RADIUS, BLUE, JOINT_THICKNESS)
-
-				for idx, segment in enumerate(skeleton_lines_segments):
-					segment = [(int(joint.x*width), int(joint.y*height)) for joint in segment]
-					segment = np.array(segment, dtype=np.int32)
-					skeleton_lines_segments[idx] = segment
-
-				img = cv2.polylines(img, 
-					                skeleton_lines_segments, 
-					                isClosed=False,
-					                color=BLUE,
-					                thickness=THICKNESS_CORNERS,
-					                lineType=cv2.LINE_AA)
-
-		if self.compressed_output:
-			img_msg = CompressedImage()
-			img_msg.header.stamp = rospy.Time.now()
-			img_msg.format = "jpeg"
-			img_msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
-		else:
-			img_msg = self.bridge.cv2_to_imgmsg(img, "bgr8")
-
-		self.img_pub.publish(img_msg)
-
-	def find_max_distance_corner(self, x, y, width, height):
-		""" Function returning the maximum distance 
-			corner of the image. The result is encoded as:
-				- [0, 0] = top left corner
-				- [1, 0] = top right corner
-				- [0, 1] = bottom left corner
-				- [1, 1] = bottom right corner """
-
-		return [x < width/2, y < height/2]
-
-	def encode_opposite_corner(self, corner_x, corner_y):
-		""" Following the same type of enconding 
-			described in the find_max_distance_corner,
-			this function returns the opposite corner """
-
-		return [int(not bool(corner_x)), int(not bool(corner_y))]
-
-	def calibrate_font_size(self, number_of_letters):
-		""" Initial calibration of the font size
-			for the ids label. It uses PIL tools,
-			not opencv tools """
-
-		self.fontsize = 1
-		label = "w"*number_of_letters
-		label_width = SPACE_PER_CHARACTER*number_of_letters
-		font = ImageFont.truetype(FONT, self.fontsize)
-		text_width, text_height = font.getsize(label)
-		while text_width < (label_width - 10)\
-		  and text_height < (LABEL_HEIGHT - 6):
-		  	self.fontsize += 1
-		  	font = ImageFont.truetype(FONT, self.fontsize)
-		  	text_size, text_height = font.getsize(label)
-		self.fontsize -= 1
-		return ImageFont.truetype(FONT, self.fontsize)
-
-
-if __name__=="__main__":
-	rospy.init_node("hri_visualization")
-
-	compressed_output = rospy.get_param("~compressed_output", False)
-	
-	visualizer = hri_visualizer(compressed_output)
-
-	rospy.spin()
-
-
+    def __init__(self,
+                 compressed_output):
+        """ Constructor """
+
+        self.debugging = False
+
+        self.font = self.calibrate_font_size(5)
+
+        self.face_sub = rospy.Subscriber("/humans/faces/tracked",
+                                         IdsList,
+                                         self.face_cb,
+                                         queue_size=1)
+
+        self.body_sub = rospy.Subscriber("/humans/bodies/tracked",
+                                         IdsList,
+                                         self.body_cb,
+                                         queue_size=1)
+
+        self.persons_sub = rospy.Subscriber("/humans/persons/tracked",
+                                            IdsList,
+                                            self.persons_cb,
+                                            queue_size=1)
+
+        self.img_cb = rospy.Subscriber("/image",
+                                       Image,
+                                       self.img_cb,
+                                       queue_size=1)
+
+        self.compressed_output = compressed_output
+
+        remappings = rospy.names.get_mappings()
+        remapped_topic = remappings["image"]
+        if remapped_topic.endswith("/image_raw"):
+            fixed_name_length = len(remapped_topic)-len("image_raw")
+            hri_overlay_topic = remapped_topic[:fixed_name_length]\
+                + "hri_overlay"
+        else:
+            hri_overlay_topic = remapped_topic+"/hri_overlay"
+
+        if compressed_output:
+            self.img_pub = rospy.Publisher(hri_overlay_topic+"/compressed",
+                                           CompressedImage,
+                                           queue_size=1)
+        else:
+            self.img_pub = rospy.Publisher(hri_overlay_topic,
+                                           Image,
+                                           queue_size=1)
+
+        self.bridge = CvBridge()
+
+        self.faces = {}
+        self.bodies = {}
+        self.persons = {}
+
+        self.kb_query_srv = rospy.ServiceProxy("/kb/query", Query)
+        self.kb_event_srv = rospy.ServiceProxy("/kb/events", Event)
+
+    def face_cb(self, msg):
+        """ Callback managing the list of face ids
+                published  """
+
+        for id in msg.ids:
+            if not id in list(self.faces):
+                self.faces[id] = [rospy.Subscriber("/humans/faces/"+id+"/roi",
+                                                   RegionOfInterest,
+                                                   self.roi_cb,
+                                                   (id)),
+                                  None,
+                                  None,
+                                  None,  # Nickname
+                                  None,  # Label sizing
+                                  None]  # Font
+
+        for id in list(self.faces):
+            if not id in msg.ids:
+                self.faces[id][0].unregister()
+                del self.faces[id]
+
+    def roi_cb(self, msg, args):
+        """ Callback managing the rois.
+                It stores the face ids
+                and their rois. """
+
+        face_id = args
+        self.faces[face_id][1] = msg
+
+    def persons_cb(self, msg):
+        """ Callback managing the list of 
+                published person ids """
+
+        # Iterating over the persons' ids to
+        # check whether new people appeared or not
+        for id in msg.ids:
+            if not id in list(self.persons):
+                # Retrieving a person's nickname
+                nickname = self.retrieve_nickname(id)
+                # Every person is here represented by three objects:
+                #	- The subscriber to the person's face id
+                #	- The current face id
+                #	- A subscriber to get updates regarding
+                #		a person's name
+                # At this point, only the face id subscriber is
+                # initialised
+                face_id_topic = "/humans/persons/"+id+"/face_id"
+                self.persons[id] = [rospy.Subscriber(face_id_topic,
+                                                     String,
+                                                     self.person_face_cb,
+                                                     (nickname,
+                                                      id,
+                                                      self.debugging)),
+                                    None,
+                                    None]
+        # All of those people who are no more tracked
+        # get deleted from the persons storing dictionary
+        for id in list(self.persons):
+            if not id in msg.ids:
+                face_id = self.persons[id][1]
+                if face_id in list(self.faces):
+                    self.faces[face_id][3] = None
+                if self.persons[id][0]:
+                    self.persons[id][0].unregister()
+                if self.persons[id][2]:
+                    self.persons[id][2].unregister()
+                del self.persons[id]
+
+    def person_face_cb(self, msg, args):
+        """ callback used to assign a name to each face """
+
+        nickname = args[0]
+        self.persons[args[1]][1] = msg.data
+
+        if args[0] == args[1]:
+            nickname = self.retrieve_nickname(args[1])
+            pattern = args[1] + " preferredName ?name"
+            one_shot = False
+            models = ""
+            if not self.persons[args[1]][2]:
+                event_topic_info = self.kb_event_srv(
+                    [pattern], one_shot, [models])
+                event_topic = event_topic_info.topic
+                self.persons[args[1]][2] = rospy.Subscriber(event_topic,
+                                                            String,
+                                                            self.nickname_update_cb,
+                                                            (args[1]))
+            if (not args[2]) and (nickname == args[1]):
+                nickname = "unknown"
+
+        if msg.data in list(self.faces):
+            self.faces[msg.data][3] = nickname
+
+    def nickname_update_cb(self, msg, args):
+        """ callback managing nickname updates when no nickname 
+                is initially found """
+
+        nickname = (eval(msg.data))[0]["name"]
+        print("New nickname found: ", nickname)
+        face_id = self.persons[args][1]
+        if face_id in list(self.faces):
+            self.faces[face_id][3] = nickname
+
+    def retrieve_nickname(self, id):
+        """ It is possible to visualize the faces
+            identified either by their person id or
+            by their nickname. This function retrieves
+            a person's nickname from the knowledge base """
+
+        # The query to perform. In this format, we're looking
+        # for the name of a person whose person_id is id
+        query = id + " preferredName ?name"
+        # The variable we're interested in from the queried
+        # triples. In this case, we're only interested in
+        # the person's nickname
+        var = "?name"
+        # The model we're querying. Empty = default model
+        model = ""
+
+        nickname = self.kb_query_srv([query], [var], [model])
+        if nickname.json == "[]":
+            return id
+        else:
+            return (eval(nickname.json))[0]["name"]
+
+    def body_cb(self, msg):
+        """ Callback storing information regarding the
+                detected bodies """
+
+        for id in msg.ids:
+            if not id in list(self.bodies):
+                skeleton_topic = "/humans/bodies/"+id+"/skeleton2d"
+                self.bodies[id] = [rospy.Subscriber(skeleton_topic,
+                                                    Skeleton2D,
+                                                    self.skeleton_cb,
+                                                    (id),
+                                                    queue_size=1),
+                                   None]
+
+        for id in list(self.bodies):
+            if not id in msg.ids:
+                self.bodies[id][0].unregister()
+                del self.bodies[id]
+
+    def skeleton_cb(self, skeleton_msg, args):
+        """ Callback storing information regarding
+                a body's skeleton coordinates """
+
+        id = args
+        self.bodies[id][1] = skeleton_msg.skeleton
+
+    def img_cb(self, msg):
+        """ Callback managing the incoming images. 
+                It draws the bounding boxes for the 
+                detected faces and the skeletons
+                for the detected bodies """
+
+        # max distance of a point from the furthest corner
+        max_distance = np.sqrt(msg.height**2 + msg.width**2)
+
+        img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
+        (height, width, _) = img.shape
+        for id in list(self.faces):
+            face = self.faces[id]
+            if face[1]:
+
+                # Label sizing calibration
+                # Two possible cases:
+                # 1. The id is a 5 characters string
+                # 2. The id is a nickname with a variable sizing
+
+                label_width = LABEL_WIDTH
+                font = self.font
+
+                if not face[4] and face[3] and (len(face[3]) != 5):
+                    # calibration needed
+                    face[4] = SPACE_PER_CHARACTER*len(face[3])
+                    face[5] = self.calibrate_font_size(len(face[3]))
+
+                if face[4]:
+                    label_width = face[4]
+                    font = face[5]
+
+                starting_point = (face[1].x_offset, face[1].y_offset)
+                ending_point = (face[1].x_offset + face[1].width,
+                                face[1].y_offset + face[1].height)
+                img = cv2.rectangle(img,
+                                    starting_point,
+                                    ending_point,
+                                    BLUE,
+                                    THICKNESS,
+                                    lineType=cv2.LINE_AA)
+                # sizing the height/width of the localisation corners
+                visualization_corners_width = int(face[1].width/10)
+                visualization_corners_height = int(face[1].height/10)
+                ptsTopLeft = np.array([[face[1].x_offset
+                                        + max(10, visualization_corners_width),
+                                        face[1].y_offset
+                                        + (2*visualization_corners_height)],
+                                       [face[1].x_offset
+                                        + max(10, visualization_corners_width),
+                                        face[1].y_offset
+                                        + max(10, visualization_corners_height)],
+                                       [face[1].x_offset
+                                        + (2*visualization_corners_width),
+                                        face[1].y_offset
+                                        + max(10, visualization_corners_height)]],
+                                      dtype=np.int32)
+                ptsBottomLeft = np.array([[face[1].x_offset
+                                           + max(10, visualization_corners_width),
+                                           face[1].y_offset
+                                           + face[1].height
+                                           - (2*visualization_corners_height)],
+                                          [face[1].x_offset
+                                           + max(10, visualization_corners_width),
+                                           face[1].y_offset
+                                           + face[1].height
+                                           - max(10, visualization_corners_height)],
+                                          [face[1].x_offset
+                                           + (2*visualization_corners_width),
+                                           face[1].y_offset
+                                           + face[1].height-max(10, visualization_corners_height)]],
+                                         dtype=np.int32)
+                ptsBottomRight = np.array([[face[1].x_offset
+                                            + face[1].width
+                                            - (2*visualization_corners_width),
+                                            face[1].y_offset
+                                            + face[1].height
+                                            - max(10, visualization_corners_height)],
+                                           [face[1].x_offset
+                                            + face[1].width
+                                            - max(10, visualization_corners_width),
+                                            face[1].y_offset
+                                            + face[1].height
+                                            - max(10, visualization_corners_height)],
+                                           [face[1].x_offset
+                                            + face[1].width
+                                            - max(10, visualization_corners_width),
+                                            face[1].y_offset
+                                            + face[1].height
+                                            - (2*visualization_corners_height)]],
+                                          dtype=np.int32)
+                ptsTopRight = np.array([[face[1].x_offset
+                                         + face[1].width
+                                         - (2*visualization_corners_width),
+                                         face[1].y_offset
+                                         + max(10, visualization_corners_height)],
+                                        [face[1].x_offset
+                                         + face[1].width
+                                         - max(10, visualization_corners_width),
+                                         face[1].y_offset
+                                         + max(10, visualization_corners_height)],
+                                        [face[1].x_offset
+                                         + face[1].width
+                                         - max(10, visualization_corners_width),
+                                         face[1].y_offset
+                                         + (2*visualization_corners_height)]],
+                                       dtype=np.int32)
+
+                img = cv2.polylines(img,
+                                    [ptsTopLeft,
+                                     ptsBottomLeft,
+                                     ptsBottomRight,
+                                     ptsTopRight],
+                                    isClosed=False,
+                                    color=BLUE,
+                                    thickness=THICKNESS_CORNERS,
+                                    lineType=cv2.LINE_AA)
+
+                # Now inserting the label.
+                # Step 1: checking if a label point already exists.
+                # If this is not the case, selecting the further point
+                # the corners of the image.
+                if not face[2]:
+                    further_corner = \
+                        self.find_max_distance_corner(face[1].x_offset
+                                                      + face[1].width/2,
+                                                      face[1].y_offset
+                                                      + face[1].height/2,
+                                                      msg.width,
+                                                      msg.height)
+                    face[2] = [further_corner[0]*msg.width,
+                               further_corner[1]*msg.height]
+
+                # Step 2: if the corner has already been computed,
+                # it will remain the same as long as the label would
+                # be outside of the image.
+                roi_corner = np.array([face[1].x_offset
+                                       + (face[2][0]
+                                          / msg.width
+                                          * face[1].width),
+                                       face[1].y_offset
+                                       + (face[2][1]
+                                          / msg.height
+                                          * face[1].height)])
+                corner_to_corner = np.array(face[2]) - roi_corner
+                label_corner = roi_corner\
+                    + (corner_to_corner
+                       / np.linalg.norm(corner_to_corner, 2))\
+                    * LABEL_DISTANCE
+                distance = np.sqrt((roi_corner[0]-face[2][0])**2 +
+                                   (roi_corner[1]-face[2][1])**2)
+                if(distance
+                   < (LABEL_DISTANCE
+                      + np.sqrt(label_width**2 + LABEL_HEIGHT**2))
+                        or (label_corner[0] - label_width < 0)
+                        or (label_corner[0] + label_width > msg.width)
+                        or (label_corner[1] - LABEL_HEIGHT < 0)
+                        or (label_corner[1] + LABEL_HEIGHT > msg.height)):
+                    further_corner = self.find_max_distance_corner(
+                        face[1].x_offset
+                        + face[1].width/2,
+                        face[1].y_offset +
+                        face[1].height/2,
+                        msg.width,
+                        msg.height)
+                    face[2] = [further_corner[0]*msg.width,
+                               further_corner[1]*msg.height]
+                    roi_corner = np.array([face[1].x_offset
+                                           + (face[2][0]
+                                              / msg.width
+                                              * face[1].width),
+                                           face[1].y_offset
+                                           + (face[2][1]
+                                              / msg.height
+                                              * face[1].height)])
+                    corner_to_corner = np.array(face[2]) - roi_corner
+                    label_corner = roi_corner \
+                        + (corner_to_corner /
+                           np.linalg.norm(corner_to_corner, 2))*LABEL_DISTANCE
+
+                # Step 3: at this point the face
+                # should have assigned a far-enough
+                # corner point. It's time to print the label
+                roi_corner = np.array(roi_corner, dtype=int)
+                label_corner = np.array(label_corner, dtype=int)
+                img = cv2.line(img,
+                               roi_corner,
+                               label_corner,
+                               color=BLUE,
+                               thickness=LABEL_LINE_THICKNESS,
+                               lineType=cv2.LINE_AA)
+                roi_corner_opposite = self.encode_opposite_corner(
+                    face[2][0], face[2][1])
+                if roi_corner_opposite[0] == 0:
+                    label_top_left_x = label_corner[0]
+                    label_bottom_right_x = label_corner[0] + label_width
+                else:
+                    label_top_left_x = label_corner[0] - label_width
+                    label_bottom_right_x = label_corner[0]
+                if roi_corner_opposite[1] == 0:
+                    label_top_left_y = label_corner[1]
+                    label_bottom_right_y = label_corner[1] + LABEL_HEIGHT
+                else:
+                    label_top_left_y = label_corner[1] - LABEL_HEIGHT
+                    label_bottom_right_y = label_corner[1]
+
+                text_bottom_left = [label_top_left_x +
+                                    5, label_bottom_right_y - 3]
+
+                img = cv2.rectangle(img,
+                                    [label_top_left_x,
+                                     label_top_left_y],
+                                    [label_bottom_right_x,
+                                     label_bottom_right_y],
+                                    BLUE,
+                                    -1,
+                                    lineType=cv2.LINE_AA)
+                if not face[3]:
+                    text_width, text_height = font.getsize(id)
+                else:
+                    text_width, text_height = font.getsize(face[3])
+
+                text_top_left = [label_top_left_x
+                                 + (label_width-text_width)/2,
+                                 label_top_left_y
+                                 + (LABEL_HEIGHT-text_height)/2]
+                text_top_left = np.array(text_top_left, dtype=int)
+
+                rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                pil_img = PILImage.fromarray(rgb_img)
+
+                draw = ImageDraw.Draw(pil_img)
+                if face[3]:
+                    draw.text(text_top_left, face[3], font=self.font)
+                else:
+                    draw.text(text_top_left, id, font=self.font)
+
+                img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
+        for id in list(self.bodies):
+            skeleton = self.bodies[id][1]
+            if skeleton:
+                upper_chain = [skeleton[Skeleton2D.RIGHT_WRIST],
+                               skeleton[Skeleton2D.RIGHT_ELBOW],
+                               skeleton[Skeleton2D.RIGHT_SHOULDER],
+                               skeleton[Skeleton2D.NECK],
+                               skeleton[Skeleton2D.LEFT_SHOULDER],
+                               skeleton[Skeleton2D.LEFT_ELBOW],
+                               skeleton[Skeleton2D.LEFT_WRIST]]
+
+                body = [skeleton[Skeleton2D.LEFT_SHOULDER],
+                        skeleton[Skeleton2D.LEFT_HIP],
+                        skeleton[Skeleton2D.RIGHT_HIP],
+                        skeleton[Skeleton2D.RIGHT_SHOULDER]]
+
+                left_leg = [skeleton[Skeleton2D.LEFT_HIP],
+                            skeleton[Skeleton2D.LEFT_KNEE],
+                            skeleton[Skeleton2D.LEFT_ANKLE]]
+
+                right_leg = [skeleton[Skeleton2D.RIGHT_HIP],
+                             skeleton[Skeleton2D.RIGHT_KNEE],
+                             skeleton[Skeleton2D.RIGHT_ANKLE]]
+
+                skeleton_lines_segments = [upper_chain,
+                                           body,
+                                           left_leg,
+                                           right_leg]
+
+                for joint in joints_to_draw:
+                    joint_x = int(skeleton[joint].x*width)
+                    joint_y = int(skeleton[joint].y*height)
+                    img = cv2.circle(img, (joint_x, joint_y),
+                                     JOINT_RADIUS, BLUE, JOINT_THICKNESS)
+
+                for idx, segment in enumerate(skeleton_lines_segments):
+                    segment = [(int(joint.x*width), int(joint.y*height))
+                               for joint in segment]
+                    segment = np.array(segment, dtype=np.int32)
+                    skeleton_lines_segments[idx] = segment
+
+                img = cv2.polylines(img,
+                                    skeleton_lines_segments,
+                                    isClosed=False,
+                                    color=BLUE,
+                                    thickness=THICKNESS_CORNERS,
+                                    lineType=cv2.LINE_AA)
+
+        if self.compressed_output:
+            img_msg = CompressedImage()
+            img_msg.header.stamp = rospy.Time.now()
+            img_msg.format = "jpeg"
+            img_msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
+        else:
+            img_msg = self.bridge.cv2_to_imgmsg(img, "bgr8")
+
+        self.img_pub.publish(img_msg)
+
+    def find_max_distance_corner(self, x, y, width, height):
+        """ Function returning the maximum distance 
+                corner of the image. The result is encoded as:
+                        - [0, 0] = top left corner
+                        - [1, 0] = top right corner
+                        - [0, 1] = bottom left corner
+                        - [1, 1] = bottom right corner """
+
+        return [x < width/2, y < height/2]
+
+    def encode_opposite_corner(self, corner_x, corner_y):
+        """ Following the same type of enconding 
+                described in the find_max_distance_corner,
+                this function returns the opposite corner """
+
+        return [int(not bool(corner_x)), int(not bool(corner_y))]
+
+    def calibrate_font_size(self, number_of_letters):
+        """ Initial calibration of the font size
+                for the ids label. It uses PIL tools,
+                not opencv tools """
+
+        self.fontsize = 1
+        label = "w"*number_of_letters
+        label_width = SPACE_PER_CHARACTER*number_of_letters
+        font = ImageFont.truetype(FONT, self.fontsize)
+        text_width, text_height = font.getsize(label)
+        while text_width < (label_width - 10)\
+                and text_height < (LABEL_HEIGHT - 6):
+            self.fontsize += 1
+            font = ImageFont.truetype(FONT, self.fontsize)
+            text_size, text_height = font.getsize(label)
+        self.fontsize -= 1
+        return ImageFont.truetype(FONT, self.fontsize)
+
+
+if __name__ == "__main__":
+    rospy.init_node("hri_visualization")
+
+    compressed_output = rospy.get_param("~compressed_output", False)
+
+    visualizer = hri_visualizer(compressed_output)
+
+    rospy.spin()
