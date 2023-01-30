@@ -436,7 +436,9 @@ class hri_visualizer:
                 # should have assigned a far-enough
                 # corner point. It's time to print the label
                 roi_corner = np.array(roi_corner, dtype=int)
+                roi_corner = tuple(roi_corner)
                 label_corner = np.array(label_corner, dtype=int)
+                label_corner = tuple(label_corner)
                 img = cv2.line(img,
                                roi_corner,
                                label_corner,
@@ -460,12 +462,11 @@ class hri_visualizer:
 
                 text_bottom_left = [label_top_left_x +
                                     5, label_bottom_right_y - 3]
-
                 img = cv2.rectangle(img,
-                                    [label_top_left_x,
-                                     label_top_left_y],
-                                    [label_bottom_right_x,
-                                     label_bottom_right_y],
+                                    (label_top_left_x,
+                                     label_top_left_y),
+                                    (label_bottom_right_x,
+                                     label_bottom_right_y),
                                     BLUE,
                                     -1,
                                     lineType=cv2.LINE_AA)
