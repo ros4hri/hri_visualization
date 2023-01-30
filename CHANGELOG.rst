@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.1 (2023-01-30)
+------------------
 * reset previous topic naming
 * Code adapted to previous opencv version
   Code adapted to opencv 4.2. This was required as opencv 4.2
