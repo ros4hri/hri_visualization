@@ -10,8 +10,8 @@
 
     <node pkg="hri_visualization" name="hri_visualization" type="visualization" output="screen">
         <param name="compressed_output" value="$(arg compressed_output)"/>
-        <remap from="image" to="$(arg rgb_camera_topic)" unless="$(arg compressed_input)"/>
-        <remap from="image" to="/visualization/uncompressed_stream" if="$(arg compressed_input)"/>
+        <remap from="/image" to="$(arg rgb_camera_topic)" unless="$(arg compressed_input)"/>
+        <remap from="/image" to="/visualization/uncompressed_stream" if="$(arg compressed_input)"/>
     </node>
 
 </launch>
