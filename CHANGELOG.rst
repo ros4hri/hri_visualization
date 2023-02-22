@@ -2,6 +2,11 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* fixed remappings and don't crash if '/image' not remapped
+* Contributors: Séverin Lemaignan
+
 0.1.1 (2023-01-30)
 ------------------
 * reset previous topic naming
