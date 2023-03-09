@@ -285,7 +285,7 @@ class hri_visualizer:
                 label_width = LABEL_WIDTH
                 font = self.font
 
-                if not face[4] and face[3] and (len(face[3]) != 5):
+                if (not face[4]) and face[3]:
                     # calibration needed
                     face[4] = SPACE_PER_CHARACTER * len(face[3])
                     face[5] = self.calibrate_font_size(len(face[3]))
