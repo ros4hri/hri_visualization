@@ -10,6 +10,7 @@ import numpy as np
 from PIL import ImageFont, ImageDraw
 from PIL import Image as PILImage
 from knowledge_core.srv import Query, Event
+from threading import Lock
 
 # Drawing parameters definition
 BLUE = (255, 220, 0)
@@ -89,6 +90,8 @@ class hri_visualizer:
         self.bodies = {}
         self.persons = {}
 
+        self.persons_lock = Lock()
+
         self.kb_query_srv = rospy.ServiceProxy("/kb/query", Query)
         self.kb_event_srv = rospy.ServiceProxy("/kb/events", Event)
 
@@ -129,72 +132,84 @@ class hri_visualizer:
         """Callback managing the list of
         published person ids"""
 
-        # Iterating over the persons' ids to
-        # check whether new people appeared or not
-        for id in msg.ids:
-            if not id in list(self.persons):
-                # Retrieving a person's nickname
-                nickname = self.retrieve_nickname(id)
-                # Every person is here represented by three objects:
-                # 	- The subscriber to the person's face id
-                # 	- The current face id
-                # 	- A subscriber to get updates regarding
-                # 		a person's name
-                # At this point, only the face id subscriber is
-                # initialised
-                face_id_topic = "/humans/persons/" + id + "/face_id"
-                self.persons[id] = [
-                    rospy.Subscriber(
-                        face_id_topic,
-                        String,
-                        self.person_face_cb,
-                        (nickname, id, self.debugging),
-                    ),
-                    None,
-                    None,
-                ]
-        # All of those people who are no more tracked
-        # get deleted from the persons storing dictionary
-        for id in list(self.persons):
-            if not id in msg.ids:
-                face_id = self.persons[id][1]
-                if face_id in list(self.faces):
-                    self.faces[face_id][3] = None
-                if self.persons[id][0]:
-                    self.persons[id][0].unregister()
-                if self.persons[id][2]:
-                    self.persons[id][2].unregister()
-                del self.persons[id]
+        acquired = self.persons_lock.acquire(blocking = False)
+        if acquired:
+            try:
+                # Iterating over the persons' ids to
+                # check whether new people appeared or not
+                for id in msg.ids:
+                    if not id in list(self.persons):
+                        # Retrieving a person's nickname
+                        nickname = self.retrieve_nickname(id)
+                        # Every person is here represented by three objects:
+                        #   - The subscriber to the person's face id
+                        #   - The current face id
+                        #   - A subscriber to get updates regarding
+                        #       a person's name
+                        # At this point, only the face id subscriber is
+                        # initialised
+                        face_id_topic = "/humans/persons/" + id + "/face_id"
+                        self.persons[id] = [
+                            rospy.Subscriber(
+                                face_id_topic,
+                                String,
+                                self.person_face_cb,
+                                (nickname, id, self.debugging),
+                            ),
+                            None,
+                            None,
+                        ]
+                # All of those people who are no more tracked
+                # get deleted from the persons storing dictionary
+                for id in list(self.persons):
+                    if not id in msg.ids:
+                        face_id = self.persons[id][1]
+                        if face_id in list(self.faces):
+                            self.faces[face_id][3] = None
+                        if self.persons[id][0]:
+                            self.persons[id][0].unregister()
+                        if self.persons[id][2]:
+                            self.persons[id][2].unregister()
+                        del self.persons[id]
+            finally:
+                if acquired:
+                    self.persons_lock.release()
 
     def person_face_cb(self, msg, args):
         """callback used to assign a name to each face"""
 
-        nickname = args[0]
-        self.persons[args[1]][1] = msg.data
+        acquired = self.persons_lock.acquire(blocking = False)
+        
+        if acquired:
+            try:
+                nickname = args[0]
+                self.persons[args[1]][1] = msg.data
 
-        if args[0] == args[1]:
-            nickname = self.retrieve_nickname(args[1])
-            pattern = args[1] + " preferredName ?name"
-            one_shot = False
-            models = ""
-            if not self.persons[args[1]][2]:
-                event_topic_info = self.kb_event_srv([pattern], one_shot, [models])
-                event_topic = event_topic_info.topic
-                self.persons[args[1]][2] = rospy.Subscriber(
-                    event_topic, String, self.nickname_update_cb, (args[1])
-                )
-            if (not args[2]) and (nickname == args[1]):
-                nickname = "unknown"
+                if args[0] == args[1]:
+                    nickname = self.retrieve_nickname(args[1])
+                    pattern = args[1] + " preferredName ?name"
+                    one_shot = False
+                    models = ""
+                    if not self.persons[args[1]][2]:
+                        event_topic_info = self.kb_event_srv([pattern], one_shot, [models])
+                        event_topic = event_topic_info.topic
+                        self.persons[args[1]][2] = rospy.Subscriber(
+                            event_topic, String, self.nickname_update_cb, (args[1])
+                        )
+                    if (not args[2]) and (nickname == args[1]):
+                        nickname = "unknown"
 
-        if msg.data in list(self.faces):
-            self.faces[msg.data][3] = nickname
+                if msg.data in list(self.faces):
+                    self.faces[msg.data][3] = nickname
+            finally:
+                if acquired:
+                    self.persons_lock.release()
 
     def nickname_update_cb(self, msg, args):
         """callback managing nickname updates when no nickname
         is initially found"""
 
         nickname = (eval(msg.data))[0]["name"]
-        print("New nickname found: ", nickname)
         face_id = self.persons[args][1]
         if face_id in list(self.faces):
             self.faces[face_id][3] = nickname
