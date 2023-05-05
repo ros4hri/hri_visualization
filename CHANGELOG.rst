@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.3 (2023-05-05)
+------------------
 * fixed dependencies
 * printing funny names instead of face/person ids
 * added fonts
