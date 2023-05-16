@@ -3,11 +3,13 @@ project(hri_visualization)
 
 find_package(catkin REQUIRED)
 
-catkin_package(
-    CATKIN_DEPENDS 
-    sensor_msgs
-    std_msgs
-    hri_msgs)
+catkin_package( CATKIN_DEPENDS 
+  rospy
+  pyhri
+  hri_msgs
+  cv_bridge
+  sensor_msgs
+)
 
 catkin_install_python(PROGRAMS nodes/visualization
                       DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
@@ -15,4 +17,9 @@ catkin_install_python(PROGRAMS nodes/visualization
 install(DIRECTORY
   launch
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(FILES
+  fonts/Montserrat/Montserrat-SemiBold.ttf
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/fonts/Montserrat
 )

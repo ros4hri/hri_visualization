@@ -2,6 +2,15 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.1.3 (2023-05-05)
+------------------
+* fixed dependencies
+* printing funny names instead of face/person ids
+* added fonts
+* fixed non-defined font
+* concurrency management over persons data
+* Contributors: lorenzoferrini
+
 0.1.2 (2023-02-22)
 ------------------
 * fixed remappings and don't crash if '/image' not remapped
