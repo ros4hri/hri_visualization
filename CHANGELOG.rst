@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.4 (2023-05-16)
+------------------
 * Merge branch 'funny_names' into 'main'
   Funny names
   See merge request ros4hri/hri_visualization!1
