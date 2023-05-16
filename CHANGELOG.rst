@@ -2,6 +2,15 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Merge branch 'funny_names' into 'main'
+  Funny names
+  See merge request ros4hri/hri_visualization!1
+* addressing review - 1st round
+* now installing only required font
+* Contributors: lorenzoferrini, lukajuricic
+
 0.1.3 (2023-05-05)
 ------------------
 * fixed dependencies
