@@ -35,6 +35,10 @@ JOINT_RADIUS = 15
 JOINT_THICKNESS = -1
 FONTS_FOLDER = rospack.get_path("hri_visualization")+"/fonts"
 FONT = FONTS_FOLDER+"/Montserrat/Montserrat-SemiBold.ttf"
+LARGEST_LETTER = "M"
+VIS_CORNER_GAP_RATIO = 0.1
+VIS_CORNER_WIDTH_RATIO = 0.1
+VIS_CORNER_HEIGHT_RATIO = 0.1
 
 # 2D skeleton joints
 # related to face keypoints won't be drawn
@@ -82,10 +86,17 @@ class HRIVisualizer:
         regarding the detected people
         is displayed
     """
+    class PersonDescriptor:
+        """ Internal class used to describe
+            person-related aspects
+        """
+        id_to_display = None
+        label_width = None
+        font = None
+        max_distance_corner = None
+
     def __init__(self, compressed_output):
         """ Constructor """
-        self.debugging = False
-
         self.font = self.calibrate_font_size(5)
 
         self.hri_listener = HRIListener()
@@ -130,7 +141,11 @@ class HRIVisualizer:
                 skeleton_topic = "/humans/bodies/" + id + "/skeleton2d"
                 self.bodies[id] = [
                     rospy.Subscriber(
-                        skeleton_topic, Skeleton2D, self.skeleton_cb, (id), queue_size=1
+                        skeleton_topic,
+                        Skeleton2D,
+                        self.skeleton_cb,
+                        (id),
+                        queue_size=1
                     ),
                     None,
                 ]
@@ -147,15 +162,19 @@ class HRIVisualizer:
         id = args
         self.bodies[id][1] = skeleton_msg.skeleton
 
-    def generate_funny_name(self, person_id):
-        """ Generating a funny name, exctracting
-            an adjective and a name from two 
+    def generate_funny_ids(self, person_id):
+        """ Extracting a funny id, which is a combination
+            of an adjective and a name from two 
             predefined lists
         """
-        hash_value = hashlib.md5(person_id.encode('utf-8')).hexdigest()
-        random_adjective = int(hash_value, 16)%10
-        random_name = int(hash_value, 20)%10
-        return adjectives[random_adjective]+" "+iconic_pokemons[random_name]
+        person_id_reverse = person_id[::-1]
+        hash_value_adjective = hashlib.md5(person_id.encode('utf-8')).hexdigest()
+        hash_value_name = hashlib.md5(person_id_reverse.encode('utf-8')).hexdigest()
+        random_adjective_index = int(hash_value_adjective, 16)%len(adjectives)
+        random_name_index = int(hash_value_name, 16)%len(iconic_pokemons)
+        return adjectives[random_adjective_index] \
+               +" " \
+               +iconic_pokemons[random_name_index]
 
     def img_cb(self, msg):
         """ Callback managing the incoming images.
@@ -163,20 +182,17 @@ class HRIVisualizer:
             detected faces and the skeletons
             for the detected bodies
         """
-        # max distance of a point from the furthest corner
-        max_distance = np.sqrt(msg.height ** 2 + msg.width ** 2)
-
         if not self.persons_lock.locked():
             with self.persons_lock:
                 # updating the tracked persons
                 tracked_persons = self.hri_listener.tracked_persons 
                 for person in tracked_persons:
                     if person not in self.persons:
-                        self.persons[person] = [None]*4
-                        funny_name = self.generate_funny_name(person)
-                        self.persons[person][0] = funny_name
-                        self.persons[person][1] = SPACE_PER_CHARACTER*len(funny_name)
-                        self.persons[person][2] = self.calibrate_font_size(len(funny_name))
+                        self.persons[person] = self.PersonDescriptor()
+                        funny_id = self.generate_funny_ids(person)
+                        self.persons[person].id_to_display = funny_id
+                        self.persons[person].label_width = SPACE_PER_CHARACTER*len(funny_id)
+                        self.persons[person].font = self.calibrate_font_size(len(funny_id))
                         
                 for person in list(self.persons.keys()):
                     if not person in tracked_persons:
@@ -187,11 +203,9 @@ class HRIVisualizer:
                 for person in list(self.persons):
                     face = tracked_persons[person].face
                     if face and face.roi:
-
                         # Label sizing calibration
-                        
-                        label_width = self.persons[person][1]
-                        font = self.persons[person][2]
+                        label_width = self.persons[person].label_width
+                        font = self.persons[person].font
 
                         starting_point = (
                             face.roi.x,
@@ -211,22 +225,32 @@ class HRIVisualizer:
                         )
 
                         # sizing the height/width of the localisation corners
-                        visualization_corners_width = int(face.roi.width / 10)
-                        visualization_corners_height = int(face.roi.height / 10)
+                        visual_roi_x = face.roi.x + BOX_THICKNESS
+                        visual_roi_y = face.roi.y + BOX_THICKNESS
+                        visual_roi_width = face.roi.width - (2*BOX_THICKNESS)
+                        visual_roi_height = face.roi.height - (2*BOX_THICKNESS)
 
                         ptsTopLeft = np.array(
                             [
                                 [
-                                    face.roi.x + max(10, visualization_corners_width),
-                                    face.roi.y + (2 * visualization_corners_height),
+                                    visual_roi_x \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_height \
+                                    + VIS_CORNER_HEIGHT_RATIO*visual_roi_height
                                 ],
                                 [
-                                    face.roi.x + max(10, visualization_corners_width),
-                                    face.roi.y + max(10, visualization_corners_height),
+                                    visual_roi_x \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    face.roi.x + (2 * visualization_corners_width),
-                                    face.roi.y + max(10, visualization_corners_height),
+                                    visual_roi_x \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_width
+                                    + VIS_CORNER_WIDTH_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                             ],
                             dtype=np.int32,
@@ -234,51 +258,27 @@ class HRIVisualizer:
                         ptsBottomLeft = np.array(
                             [
                                 [
-                                    face.roi.x + max(10, visualization_corners_width),
-                                    face.roi.y
-                                    + face.roi.height
-                                    - (2 * visualization_corners_height),
+                                    visual_roi_x \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + visual_roi_height \
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_height \
+                                    - VIS_CORNER_HEIGHT_RATIO*visual_roi_height
                                 ],
                                 [
-                                    face.roi.x + max(10, visualization_corners_width),
-                                    face.roi.y
-                                    + face.roi.height
-                                    - max(10, visualization_corners_height),
+                                    visual_roi_x \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + visual_roi_height \
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    face.roi.x + (2 * visualization_corners_width),
-                                    face.roi.y
-                                    + face.roi.height
-                                    - max(10, visualization_corners_height),
-                                ],
-                            ],
-                            dtype=np.int32,
-                        )
-                        ptsBottomRight = np.array(
-                            [
-                                [
-                                    face.roi.x
-                                    + face.roi.width
-                                    - (2 * visualization_corners_width),
-                                    face.roi.y
-                                    + face.roi.height
-                                    - max(10, visualization_corners_height),
-                                ],
-                                [
-                                    face.roi.x
-                                    + face.roi.width
-                                    - max(10, visualization_corners_width),
-                                    face.roi.y
-                                    + face.roi.height
-                                    - max(10, visualization_corners_height),
-                                ],
-                                [
-                                    face.roi.x
-                                    + face.roi.width
-                                    - max(10, visualization_corners_width),
-                                    face.roi.y
-                                    + face.roi.height
-                                    - (2 * visualization_corners_height),
+                                    visual_roi_x \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_width \
+                                    + VIS_CORNER_WIDTH_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + visual_roi_height \
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                             ],
                             dtype=np.int32,
@@ -286,22 +286,58 @@ class HRIVisualizer:
                         ptsTopRight = np.array(
                             [
                                 [
-                                    face.roi.x
-                                    + face.roi.width
-                                    - (2 * visualization_corners_width),
-                                    face.roi.y + max(10, visualization_corners_height),
+                                    visual_roi_x \
+                                    + visual_roi_width\
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_width \
+                                    - VIS_CORNER_WIDTH_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    face.roi.x
-                                    + face.roi.width
-                                    - max(10, visualization_corners_width),
-                                    face.roi.y + max(10, visualization_corners_height),
+                                    visual_roi_x \
+                                    + visual_roi_width \
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    face.roi.x
-                                    + face.roi.width
-                                    - max(10, visualization_corners_width),
-                                    face.roi.y + (2 * visualization_corners_height),
+                                    visual_roi_x \
+                                    + visual_roi_width \
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_height \
+                                    + VIS_CORNER_HEIGHT_RATIO*visual_roi_height
+                                ],
+                            ],
+                            dtype=np.int32,
+                        )
+                        ptsBottomRight = np.array(
+                            [
+                                [
+                                    visual_roi_x \
+                                    + visual_roi_width\
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_width \
+                                    - VIS_CORNER_WIDTH_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + visual_roi_height \
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_height
+                                ],
+                                [
+                                    visual_roi_x \
+                                    + visual_roi_width\
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + visual_roi_height \
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_height
+                                ],
+                                [
+                                    visual_roi_x \
+                                    + visual_roi_width\
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_width,
+                                    visual_roi_y \
+                                    + visual_roi_height \
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_height \
+                                    - VIS_CORNER_HEIGHT_RATIO*visual_roi_height
                                 ],
                             ],
                             dtype=np.int32,
@@ -320,14 +356,14 @@ class HRIVisualizer:
                         # Step 1: checking if a label point already exists.
                         # If this is not the case, selecting the further point
                         # the corners of the image.
-                        if not self.persons[person][3]:
+                        if not self.persons[person].max_distance_corner:
                             further_corner = self.find_max_distance_corner(
                                 face.roi.x + face.roi.width / 2,
                                 face.roi.y + face.roi.height / 2,
                                 msg.width,
                                 msg.height,
                             )
-                            self.persons[person][3] = [
+                            self.persons[person].max_distance_corner = [
                                 further_corner[0] * msg.width,
                                 further_corner[1] * msg.height,
                             ]
@@ -337,22 +373,23 @@ class HRIVisualizer:
                         # be outside of the image.
                         roi_corner = np.array(
                             [
-                                face.roi.x + (self.persons[person][3][0] / msg.width * face.roi.width),
-                                face.roi.y + (self.persons[person][3][1] / msg.height * face.roi.height),
+                                face.roi.x + (self.persons[person].max_distance_corner[0] / msg.width * face.roi.width),
+                                face.roi.y + (self.persons[person].max_distance_corner[1] / msg.height * face.roi.height),
                             ]
                         )
-                        corner_to_corner = np.array(self.persons[person][3]) - roi_corner
+                        label_to_corner = np.array(self.persons[person].max_distance_corner) - roi_corner
+                        label_to_corner_distance = np.linalg.norm([roi_corner[0] \
+                                                                   - self.persons[person].max_distance_corner[0],
+                                                                   roi_corner[1] \
+                                                                   - self.persons[person].max_distance_corner[1]],
+                                                                  2)
                         label_corner = (
                             roi_corner
-                            + (corner_to_corner / np.linalg.norm(corner_to_corner, 2))
+                            + (label_to_corner / label_to_corner_distance)
                             * LABEL_DISTANCE
                         )
-                        distance = np.sqrt(
-                            (roi_corner[0] - self.persons[person][3][0]) ** 2
-                            + (roi_corner[1] - self.persons[person][3][1]) ** 2
-                        )
                         if (
-                            distance
+                            label_to_corner_distance
                             < (LABEL_DISTANCE + np.sqrt(label_width ** 2 + LABEL_HEIGHT ** 2))
                             or (label_corner[0] - label_width < 0)
                             or (label_corner[0] + label_width > msg.width)
@@ -365,21 +402,20 @@ class HRIVisualizer:
                                 msg.width,
                                 msg.height,
                             )
-                            self.persons[person][3] = [
+                            self.persons[person].max_distance_corner = [
                                 further_corner[0] * msg.width,
                                 further_corner[1] * msg.height,
                             ]
                             roi_corner = np.array(
                                 [
-                                    face.roi.x + (self.persons[person][3][0] / msg.width * face.roi.width),
-                                    face.roi.y
-                                    + (self.persons[person][3][1] / msg.height * face.roi.height),
+                                    face.roi.x + (self.persons[person].max_distance_corner[0] / msg.width * face.roi.width),
+                                    face.roi.y + (self.persons[person].max_distance_corner[1] / msg.height * face.roi.height),
                                 ]
                             )
-                            corner_to_corner = np.array(self.persons[person][3]) - roi_corner
+                            label_to_corner = np.array(self.persons[person].max_distance_corner) - roi_corner
                             label_corner = (
                                 roi_corner
-                                + (corner_to_corner / np.linalg.norm(corner_to_corner, 2))
+                                + (label_to_corner / np.linalg.norm(label_to_corner, 2))
                                 * LABEL_DISTANCE
                             )
 
@@ -399,7 +435,7 @@ class HRIVisualizer:
                             lineType=cv2.LINE_AA,
                         )
                         roi_corner_opposite = self.encode_opposite_corner(
-                            self.persons[person][3][0], self.persons[person][3][1]
+                            self.persons[person].max_distance_corner[0], self.persons[person].max_distance_corner[1]
                         )
                         if roi_corner_opposite[0] == 0:
                             label_top_left_x = label_corner[0]
@@ -414,7 +450,6 @@ class HRIVisualizer:
                             label_top_left_y = label_corner[1] - LABEL_HEIGHT
                             label_bottom_right_y = label_corner[1]
 
-                        text_bottom_left = [label_top_left_x + 5, label_bottom_right_y - 3]
                         img = cv2.rectangle(
                             img,
                             (label_top_left_x, label_top_left_y),
@@ -423,10 +458,8 @@ class HRIVisualizer:
                             -1,
                             lineType=cv2.LINE_AA,
                         )
-                        if not self.persons[person][0]:
-                            text_width, text_height = font.getsize(id)
-                        else:
-                            text_width, text_height = font.getsize(self.persons[person][0])
+                        
+                        text_width, text_height = font.getsize(self.persons[person].id_to_display)
 
                         text_top_left = [
                             label_top_left_x + (label_width - text_width) / 2,
@@ -438,9 +471,9 @@ class HRIVisualizer:
                         pil_img = PILImage.fromarray(rgb_img)
 
                         draw = ImageDraw.Draw(pil_img)
-                        if self.persons[person][0]:
+                        if self.persons[person].id_to_display:
                             draw.text(text_top_left,
-                                      self.persons[person][0],
+                                      self.persons[person].id_to_display,
                                       font=self.font,
                                       fill=TEXT_BLACK)
                         else:
@@ -543,7 +576,7 @@ class HRIVisualizer:
             not opencv tools
         """
         self.fontsize = 1
-        label = "M" * number_of_letters
+        label = LARGEST_LETTER * number_of_letters
         label_width = SPACE_PER_CHARACTER * number_of_letters
         font = ImageFont.truetype(FONT, self.fontsize)
         text_width, text_height = font.getsize(label)
