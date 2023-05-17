@@ -2,6 +2,11 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* add launch file to republish throlled version of the stream
+* Contributors: Séverin Lemaignan
+
 0.1.4 (2023-05-16)
 ------------------
 * Merge branch 'funny_names' into 'main'
