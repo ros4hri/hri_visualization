@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.5 (2023-05-17)
+------------------
 * add launch file to republish throlled version of the stream
 * Contributors: Séverin Lemaignan
 
