@@ -1,0 +1,13 @@
+<launch>
+    <arg name="rgb_camera" default="/camera/color/"/>
+    <arg name="rgb_camera_topic" default="$(arg rgb_camera)/image_raw"/>
+    <arg name="rgb_camera_compressed_topic" default="$(arg rgb_camera_topic)/compressed"/>
+    <arg name="compressed_input" default="false"/>
+    <arg name="compressed_output" default="false"/>
+
+    <include file="$(find hri_visualization)/launch/hri_visualization.launch" pass_all_args="true" />
+
+    <!-- publish as well a throttled version of the HRI overlay, to ease display on the robot webbrowser -->
+    <node pkg="pal_webapp_surveillance" type="image_throttle.py" name="hri_overlay_throttle" args="$(arg rgb_camera)/hri_overlay /head_front_camera/color/camera_info $(arg rgb_camera)/hri_overlay_throttle /unused head_front_camera_color_optical_frame 0.33 50 bgr8 rgb8" output="screen"/>
+
+</launch>

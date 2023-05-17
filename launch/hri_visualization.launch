@@ -2,9 +2,9 @@
 
     <arg name="rgb_camera" default="/camera/color/"/>
     <arg name="rgb_camera_topic" default="$(arg rgb_camera)/image_raw"/>
-    <arg name = "rgb_camera_compressed_topic" default="$(arg rgb_camera_topic)/compressed"/>
+    <arg name="rgb_camera_compressed_topic" default="$(arg rgb_camera_topic)/compressed"/>
     <arg name="compressed_input" default="false"/>
-    <arg name="compressed_output" default="False"/>
+    <arg name="compressed_output" default="false"/>
 
     <node name="republish" type="republish" pkg="image_transport" output="screen" args="compressed in:=$(arg rgb_camera_topic) raw out:=/visualization/uncompressed_stream" if="$(arg compressed_input)"/>
 
