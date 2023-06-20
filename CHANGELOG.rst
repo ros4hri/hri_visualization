@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.6 (2023-06-20)
+------------------
 * defined a flag to decide whether or not to display the funny names
 * Contributors: lorenzoferrini
 
