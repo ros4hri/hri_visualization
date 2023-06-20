@@ -95,9 +95,11 @@ class HRIVisualizer:
         font = None
         max_distance_corner = None
 
-    def __init__(self, compressed_output):
+    def __init__(self, funny_names, compressed_output):
         """ Constructor """
         self.font = self.calibrate_font_size(5)
+
+        self.funny_names = funny_names
 
         self.hri_listener = HRIListener()
        
@@ -189,10 +191,13 @@ class HRIVisualizer:
                 for person in tracked_persons:
                     if person not in self.persons:
                         self.persons[person] = self.PersonDescriptor()
-                        funny_id = self.generate_funny_ids(person)
-                        self.persons[person].id_to_display = funny_id
-                        self.persons[person].label_width = SPACE_PER_CHARACTER*len(funny_id)
-                        self.persons[person].font = self.calibrate_font_size(len(funny_id))
+                        if self.funny_names:
+                            id_displayed = self.generate_funny_ids(person)
+                        else:
+                            id_displayed = person
+                        self.persons[person].id_to_display = id_displayed
+                        self.persons[person].label_width = SPACE_PER_CHARACTER*len(id_displayed)
+                        self.persons[person].font = self.calibrate_font_size(len(id_displayed))
                         
                 for person in list(self.persons.keys()):
                     if not person in tracked_persons:
@@ -591,8 +596,9 @@ class HRIVisualizer:
 if __name__ == "__main__":
     rospy.init_node("hri_visualization")
 
+    funny_names = rospy.get_param("~funny_names", False)
     compressed_output = rospy.get_param("~compressed_output", False)
 
-    visualizer = HRIVisualizer(compressed_output)
+    visualizer = HRIVisualizer(funny_names, compressed_output)
 
     rospy.spin()
