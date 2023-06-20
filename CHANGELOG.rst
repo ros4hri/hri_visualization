@@ -2,6 +2,11 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* defined a flag to decide whether or not to display the funny names
+* Contributors: lorenzoferrini
+
 0.1.5 (2023-05-17)
 ------------------
 * add launch file to republish throlled version of the stream
