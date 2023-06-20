@@ -4,6 +4,7 @@
     <arg name="rgb_camera_compressed_topic" default="$(arg rgb_camera_topic)/compressed"/>
     <arg name="compressed_input" default="false"/>
     <arg name="compressed_output" default="false"/>
+    <arg name="funny_names" default="false" doc="If true, the visualizer will display a random adjective+pokemon name as a person identifier (e.g., Fiery Bulbasaur). If false, the visualizer will display the ros4hri person identifier (e.g., anonymous_person_abcde)."/>
 
     <include file="$(find hri_visualization)/launch/hri_visualization.launch" pass_all_args="true" />
 
