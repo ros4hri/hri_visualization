@@ -221,13 +221,18 @@ class HRIVisualizer:
                         label_width = self.persons[person].label_width
                         font = self.persons[person].font
 
+                        face_x = int(face.roi.xmin * width)
+                        face_y = int(face.roi.ymin * height)
+                        face_width = int((face.roi.xmax - face.roi.xmin) * width)
+                        face_height = int((face.roi.ymax - face.roi.ymin) * height)
+
                         starting_point = (
-                            face.roi.x,
-                            face.roi.y
+                            face_x,
+                            face_y
                         )
                         ending_point = (
-                            face.roi.x+face.roi.width,
-                            face.roi.y+face.roi.height,
+                            face_x + face_width,
+                            face_y + face_height
                         )
                         img = cv2.rectangle(
                             img,
@@ -239,10 +244,10 @@ class HRIVisualizer:
                         )
 
                         # sizing the height/width of the localisation corners
-                        visual_roi_x = face.roi.x + BOX_THICKNESS
-                        visual_roi_y = face.roi.y + BOX_THICKNESS
-                        visual_roi_width = face.roi.width - (2*BOX_THICKNESS)
-                        visual_roi_height = face.roi.height - (2*BOX_THICKNESS)
+                        visual_roi_x = face_x + BOX_THICKNESS
+                        visual_roi_y = face_y + BOX_THICKNESS
+                        visual_roi_width = face_width - (2*BOX_THICKNESS)
+                        visual_roi_height = face_height - (2*BOX_THICKNESS)
 
                         ptsTopLeft = np.array(
                             [
@@ -372,14 +377,14 @@ class HRIVisualizer:
                         # the corners of the image.
                         if not self.persons[person].max_distance_corner:
                             further_corner = self.find_max_distance_corner(
-                                face.roi.x + face.roi.width / 2,
-                                face.roi.y + face.roi.height / 2,
-                                msg.width,
-                                msg.height,
+                                face_x + face_width / 2,
+                                face_y + face_height / 2,
+                                width,
+                                height,
                             )
                             self.persons[person].max_distance_corner = [
-                                further_corner[0] * msg.width,
-                                further_corner[1] * msg.height,
+                                further_corner[0] * width,
+                                further_corner[1] * height,
                             ]
 
                         # Step 2: if the corner has already been computed,
@@ -387,8 +392,8 @@ class HRIVisualizer:
                         # be outside of the image.
                         roi_corner = np.array(
                             [
-                                face.roi.x + (self.persons[person].max_distance_corner[0] / msg.width * face.roi.width),
-                                face.roi.y + (self.persons[person].max_distance_corner[1] / msg.height * face.roi.height),
+                                face_x + (self.persons[person].max_distance_corner[0] / width * face_width),
+                                face_y + (self.persons[person].max_distance_corner[1] / height * face_height),
                             ]
                         )
                         label_to_corner = np.array(self.persons[person].max_distance_corner) - roi_corner
@@ -406,24 +411,24 @@ class HRIVisualizer:
                             label_to_corner_distance
                             < (LABEL_DISTANCE + np.sqrt(label_width ** 2 + LABEL_HEIGHT ** 2))
                             or (label_corner[0] - label_width < 0)
-                            or (label_corner[0] + label_width > msg.width)
+                            or (label_corner[0] + label_width > width)
                             or (label_corner[1] - LABEL_HEIGHT < 0)
-                            or (label_corner[1] + LABEL_HEIGHT > msg.height)
+                            or (label_corner[1] + LABEL_HEIGHT > height)
                         ):
                             further_corner = self.find_max_distance_corner(
-                                face.roi.x + face.roi.width / 2,
-                                face.roi.y + face.roi.height / 2,
-                                msg.width,
-                                msg.height,
+                                face_x + face_width / 2,
+                                face_y + face_height / 2,
+                                width,
+                                height,
                             )
                             self.persons[person].max_distance_corner = [
-                                further_corner[0] * msg.width,
-                                further_corner[1] * msg.height,
+                                further_corner[0] * width,
+                                further_corner[1] * height,
                             ]
                             roi_corner = np.array(
                                 [
-                                    face.roi.x + (self.persons[person].max_distance_corner[0] / msg.width * face.roi.width),
-                                    face.roi.y + (self.persons[person].max_distance_corner[1] / msg.height * face.roi.height),
+                                    face_x + (self.persons[person].max_distance_corner[0] / width * face_width),
+                                    face_y + (self.persons[person].max_distance_corner[1] / height * face_height),
                                 ]
                             )
                             label_to_corner = np.array(self.persons[person].max_distance_corner) - roi_corner
