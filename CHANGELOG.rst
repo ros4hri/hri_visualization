@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.7 (2023-07-05)
+------------------
 * change RoI message type to normalized one
 * add basic diagnostics
 * Contributors: Luka Juricic
