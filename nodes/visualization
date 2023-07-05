@@ -4,6 +4,7 @@ import rospy
 
 from hri_msgs.msg import IdsList, Skeleton2D
 from sensor_msgs.msg import Image, CompressedImage
+from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from rospkg import RosPack
 from pyhri.hri import HRIListener
 
@@ -126,6 +127,12 @@ class HRIVisualizer:
         else:
             self.img_pub = rospy.Publisher(hri_overlay_topic, Image, queue_size=1)
 
+        diag_period = rospy.get_param("~diagnostic_period", 1)
+        self.diag_timer = rospy.Timer(rospy.Duration(diag_period), self.do_diagnostics)
+        self.diag_pub = rospy.Publisher("/diagnostics", DiagnosticArray, queue_size=1)
+
+        self.proc_time_ms = 0
+
         self.bridge = CvBridge()
 
         self.faces = {}
@@ -186,6 +193,8 @@ class HRIVisualizer:
         """
         if not self.persons_lock.locked():
             with self.persons_lock:
+                start_proc_time = rospy.Time.now()
+
                 # updating the tracked persons
                 tracked_persons = self.hri_listener.tracked_persons 
                 for person in tracked_persons:
@@ -555,8 +564,23 @@ class HRIVisualizer:
                 else:
                     img_msg = self.bridge.cv2_to_imgmsg(img, "bgr8")
 
+                self.proc_time_ms = (rospy.Time.now() - start_proc_time).to_sec() * 1000
                 self.img_pub.publish(img_msg)
 
+    def do_diagnostics(self, event=None):
+        arr = DiagnosticArray()
+        arr.header.stamp = rospy.Time.now()
+
+        msg = DiagnosticStatus(name="Social perception: Visualization", hardware_id="none")
+        msg.level = DiagnosticStatus.OK
+        msg.values = [
+            KeyValue(key="Package name", value='hri_visualization'),
+            KeyValue(key="Rendering time",
+                     value="{:.2f}".format(self.proc_time_ms) + "ms"),
+        ]
+
+        arr.status = [msg]
+        self.diag_pub.publish(arr)
 
     def find_max_distance_corner(self, x, y, width, height):
         """ Function returning the maximum distance

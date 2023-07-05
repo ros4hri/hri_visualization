@@ -9,6 +9,7 @@ catkin_package( CATKIN_DEPENDS
   hri_msgs
   cv_bridge
   sensor_msgs
+  diagnostic_msgs
 )
 
 catkin_install_python(PROGRAMS nodes/visualization
