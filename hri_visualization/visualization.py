@@ -226,12 +226,10 @@ class HRIVisualizer(Node):
                         # Label sizing calibration
                         label_width = self.persons[person].label_width
                         font = self.persons[person].font
-                        face_x = int(face.roi.xmin * width)
-                        face_y = int(face.roi.ymin * height)
-                        face_width = int(
-                            (face.roi.xmax - face.roi.xmin) * width)
-                        face_height = int(
-                            (face.roi.ymax - face.roi.ymin) * height)
+                        face_x = int(face.roi[0] * width)
+                        face_y = int(face.roi[1] * height)
+                        face_width = int(face.roi[2] * width)
+                        face_height = int(face.roi[3] * height)
 
                         starting_point = (
                             face_x,
