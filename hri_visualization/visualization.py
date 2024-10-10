@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
-import rospy
-
+import rclpy
+from rclpy.node import Node
 from hri_msgs.msg import IdsList, Skeleton2D
 from sensor_msgs.msg import Image, CompressedImage
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from rospkg import RosPack
-from pyhri.hri import HRIListener
+from hri import HRIListener
 
 import cv2
 from cv_bridge import CvBridge
@@ -17,10 +16,10 @@ from PIL import ImageFont, ImageDraw
 from PIL import Image as PILImage
 
 from threading import Lock
-
 import hashlib
 
-rospack = RosPack()
+from ament_index_python.packages import get_package_share_directory
+from pathlib import Path
 
 # Drawing parameters definition
 PASTEL_YELLOW = (174, 239, 238)
@@ -34,8 +33,13 @@ SPACE_PER_CHARACTER = 14
 LABEL_LINE_THICKNESS = 1
 JOINT_RADIUS = 15
 JOINT_THICKNESS = -1
-FONTS_FOLDER = rospack.get_path("hri_visualization")+"/fonts"
-FONT = FONTS_FOLDER+"/Montserrat/Montserrat-SemiBold.ttf"
+
+# Use ament_index to get the package's share directory in ROS2
+package_path = Path(get_package_share_directory("hri_visualization"))
+
+# Define font path using pathlib's Path
+FONTS_FOLDER = package_path / "fonts"
+FONT = str(FONTS_FOLDER / "Montserrat/Montserrat-SemiBold.ttf")
 LARGEST_LETTER = "M"
 VIS_CORNER_GAP_RATIO = 0.1
 VIS_CORNER_WIDTH_RATIO = 0.1
@@ -60,15 +64,15 @@ joints_to_draw = [
 ]
 
 iconic_pokemons = ['Pikachu',
-                  'Charizard',
-                  'Mewtwo',
-                  'Blastoise',
-                  'Snorlax',
-                  'Bulbasaur',
-                  'Gyarados',
-                  'Dragonite',
-                  'Eevee',
-                  'Lapras']
+                   'Charizard',
+                   'Mewtwo',
+                   'Blastoise',
+                   'Snorlax',
+                   'Bulbasaur',
+                   'Gyarados',
+                   'Dragonite',
+                   'Eevee',
+                   'Lapras']
 
 adjectives = ['Vegan',
               'Fiery',
@@ -81,7 +85,8 @@ adjectives = ['Vegan',
               'Adaptable',
               'Gentle']
 
-class HRIVisualizer:
+
+class HRIVisualizer(Node):
     """ A class managing publishing an
         image stream where information
         regarding the detected people
@@ -96,40 +101,42 @@ class HRIVisualizer:
         font = None
         max_distance_corner = None
 
-    def __init__(self, funny_names, compressed_output):
+    def __init__(self):
         """ Constructor """
+        super().__init__('hri_visualization')
+        self.declare_parameter('funny_names', False)
+        self.declare_parameter('compressed_output', False)
+        self.declare_parameter('image_topic', '/image')
+        self.funny_names = self.get_parameter('funny_names').value
+        self.compressed_output = self.get_parameter('compressed_output').value
+        self.image_topic = self.get_parameter('image_topic').value
         self.font = self.calibrate_font_size(5)
 
-        self.funny_names = funny_names
+        self.hri_listener = HRIListener('hri_listener')
 
-        self.hri_listener = HRIListener()
-       
-        self.body_sub = rospy.Subscriber(
-            "/humans/bodies/tracked", IdsList, self.body_cb, queue_size=1
-        )
+        self.body_sub = self.create_subscription(
+            IdsList, "/humans/bodies/tracked", self.body_cb, 1)
+        self.img_sub = self.create_subscription(
+            Image, "/image", self.img_cb, 1)
 
-        self.img_cb = rospy.Subscriber("/image", Image, self.img_cb, queue_size=1)
-
-        self.compressed_output = compressed_output
-
-        remappings = rospy.names.get_mappings()
-        remapped_topic = remappings.get("/image", "/image_raw")
-        if remapped_topic.endswith("/image_raw"):
-            fixed_name_length = len(remapped_topic) - len("image_raw")
-            hri_overlay_topic = remapped_topic[:fixed_name_length] + "hri_overlay"
+        if self.image_topic.endswith("/image_raw"):
+            fixed_name_length = len(self.image_topic) - len("image_raw")
+            self.hri_overlay_topic = self.image_topic[:
+                                                      fixed_name_length] + "hri_overlay"
         else:
-            hri_overlay_topic = remapped_topic + "/hri_overlay"
+            self.hri_overlay_topic = self.image_topic + "/hri_overlay"
 
-        if compressed_output:
-            self.img_pub = rospy.Publisher(
-                hri_overlay_topic + "/compressed", CompressedImage, queue_size=1
-            )
+        if self.compressed_output:
+            self.img_pub = self.create_publisher(
+                CompressedImage, self.hri_overlay_topic + "/compressed", 1)
         else:
-            self.img_pub = rospy.Publisher(hri_overlay_topic, Image, queue_size=1)
+            self.img_pub = self.create_publisher(
+                Image, self.hri_overlay_topic, 1)
 
-        diag_period = rospy.get_param("~diagnostic_period", 1)
-        self.diag_timer = rospy.Timer(rospy.Duration(diag_period), self.do_diagnostics)
-        self.diag_pub = rospy.Publisher("/diagnostics", DiagnosticArray, queue_size=1)
+        diag_period = self.declare_parameter("diagnostic_period", 1.0).value
+        self.diag_pub = self.create_publisher(
+            DiagnosticArray, "/diagnostics", 1)
+        self.diag_timer = self.create_timer(diag_period, self.do_diagnostics)
 
         self.proc_time_ms = 0
 
@@ -142,26 +149,20 @@ class HRIVisualizer:
         self.persons_lock = Lock()
 
     def body_cb(self, msg):
-        """ Callback storing information regarding the
-            detected bodies
-        """
+        """ Callback storing information regarding the detected bodies """
         for id in msg.ids:
-            if not id in list(self.bodies):
-                skeleton_topic = "/humans/bodies/" + id + "/skeleton2d"
+            if id not in self.bodies:
+                skeleton_topic = f"/humans/bodies/{id}/skeleton2d"
                 self.bodies[id] = [
-                    rospy.Subscriber(
-                        skeleton_topic,
-                        Skeleton2D,
-                        self.skeleton_cb,
-                        (id),
-                        queue_size=1
-                    ),
+                    self.create_subscription(
+                        Skeleton2D, skeleton_topic, self.skeleton_cb, 1),
                     None,
                 ]
 
         for id in list(self.bodies):
-            if not id in msg.ids:
-                self.bodies[id][0].unregister()
+            if id not in msg.ids:
+                # Unregister the subscription in ROS2
+                self.bodies[id][0].destroy()
                 del self.bodies[id]
 
     def skeleton_cb(self, skeleton_msg, args):
@@ -177,13 +178,16 @@ class HRIVisualizer:
             predefined lists
         """
         person_id_reverse = person_id[::-1]
-        hash_value_adjective = hashlib.md5(person_id.encode('utf-8')).hexdigest()
-        hash_value_name = hashlib.md5(person_id_reverse.encode('utf-8')).hexdigest()
-        random_adjective_index = int(hash_value_adjective, 16)%len(adjectives)
-        random_name_index = int(hash_value_name, 16)%len(iconic_pokemons)
+        hash_value_adjective = hashlib.md5(
+            person_id.encode('utf-8')).hexdigest()
+        hash_value_name = hashlib.md5(
+            person_id_reverse.encode('utf-8')).hexdigest()
+        random_adjective_index = int(
+            hash_value_adjective, 16) % len(adjectives)
+        random_name_index = int(hash_value_name, 16) % len(iconic_pokemons)
         return adjectives[random_adjective_index] \
-               +" " \
-               +iconic_pokemons[random_name_index]
+            + " " \
+            + iconic_pokemons[random_name_index]
 
     def img_cb(self, msg):
         """ Callback managing the incoming images.
@@ -193,10 +197,10 @@ class HRIVisualizer:
         """
         if not self.persons_lock.locked():
             with self.persons_lock:
-                start_proc_time = rospy.Time.now()
+                start_proc_time = self.get_clock().now()
 
                 # updating the tracked persons
-                tracked_persons = self.hri_listener.tracked_persons 
+                tracked_persons = self.hri_listener.tracked_persons
                 for person in tracked_persons:
                     if person not in self.persons:
                         self.persons[person] = self.PersonDescriptor()
@@ -205,9 +209,11 @@ class HRIVisualizer:
                         else:
                             id_displayed = person
                         self.persons[person].id_to_display = id_displayed
-                        self.persons[person].label_width = SPACE_PER_CHARACTER*len(id_displayed)
-                        self.persons[person].font = self.calibrate_font_size(len(id_displayed))
-                        
+                        self.persons[person].label_width = SPACE_PER_CHARACTER * \
+                            len(id_displayed)
+                        self.persons[person].font = self.calibrate_font_size(
+                            len(id_displayed))
+
                 for person in list(self.persons.keys()):
                     if not person in tracked_persons:
                         del self.persons[person]
@@ -220,11 +226,12 @@ class HRIVisualizer:
                         # Label sizing calibration
                         label_width = self.persons[person].label_width
                         font = self.persons[person].font
-
                         face_x = int(face.roi.xmin * width)
                         face_y = int(face.roi.ymin * height)
-                        face_width = int((face.roi.xmax - face.roi.xmin) * width)
-                        face_height = int((face.roi.ymax - face.roi.ymin) * height)
+                        face_width = int(
+                            (face.roi.xmax - face.roi.xmin) * width)
+                        face_height = int(
+                            (face.roi.ymax - face.roi.ymin) * height)
 
                         starting_point = (
                             face_x,
@@ -252,23 +259,23 @@ class HRIVisualizer:
                         ptsTopLeft = np.array(
                             [
                                 [
-                                    visual_roi_x \
+                                    visual_roi_x
                                     + VIS_CORNER_GAP_RATIO*visual_roi_width,
-                                    visual_roi_y \
-                                    + VIS_CORNER_GAP_RATIO*visual_roi_height \
+                                    visual_roi_y
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_height
                                     + VIS_CORNER_HEIGHT_RATIO*visual_roi_height
                                 ],
                                 [
-                                    visual_roi_x \
+                                    visual_roi_x
                                     + VIS_CORNER_GAP_RATIO*visual_roi_width,
-                                    visual_roi_y \
+                                    visual_roi_y
                                     + VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    visual_roi_x \
+                                    visual_roi_x
                                     + VIS_CORNER_GAP_RATIO*visual_roi_width
                                     + VIS_CORNER_WIDTH_RATIO*visual_roi_width,
-                                    visual_roi_y \
+                                    visual_roi_y
                                     + VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                             ],
@@ -277,26 +284,26 @@ class HRIVisualizer:
                         ptsBottomLeft = np.array(
                             [
                                 [
-                                    visual_roi_x \
+                                    visual_roi_x
                                     + VIS_CORNER_GAP_RATIO*visual_roi_width,
-                                    visual_roi_y \
-                                    + visual_roi_height \
-                                    - VIS_CORNER_GAP_RATIO*visual_roi_height \
+                                    visual_roi_y
+                                    + visual_roi_height
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_height
                                     - VIS_CORNER_HEIGHT_RATIO*visual_roi_height
                                 ],
                                 [
-                                    visual_roi_x \
+                                    visual_roi_x
                                     + VIS_CORNER_GAP_RATIO*visual_roi_width,
-                                    visual_roi_y \
-                                    + visual_roi_height \
+                                    visual_roi_y
+                                    + visual_roi_height
                                     - VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    visual_roi_x \
-                                    + VIS_CORNER_GAP_RATIO*visual_roi_width \
+                                    visual_roi_x
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_width
                                     + VIS_CORNER_WIDTH_RATIO*visual_roi_width,
-                                    visual_roi_y \
-                                    + visual_roi_height \
+                                    visual_roi_y
+                                    + visual_roi_height
                                     - VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                             ],
@@ -305,26 +312,26 @@ class HRIVisualizer:
                         ptsTopRight = np.array(
                             [
                                 [
-                                    visual_roi_x \
-                                    + visual_roi_width\
-                                    - VIS_CORNER_GAP_RATIO*visual_roi_width \
+                                    visual_roi_x
+                                    + visual_roi_width
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_width
                                     - VIS_CORNER_WIDTH_RATIO*visual_roi_width,
-                                    visual_roi_y \
+                                    visual_roi_y
                                     + VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    visual_roi_x \
-                                    + visual_roi_width \
+                                    visual_roi_x
+                                    + visual_roi_width
                                     - VIS_CORNER_GAP_RATIO*visual_roi_width,
-                                    visual_roi_y \
+                                    visual_roi_y
                                     + VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    visual_roi_x \
-                                    + visual_roi_width \
+                                    visual_roi_x
+                                    + visual_roi_width
                                     - VIS_CORNER_GAP_RATIO*visual_roi_width,
-                                    visual_roi_y \
-                                    + VIS_CORNER_GAP_RATIO*visual_roi_height \
+                                    visual_roi_y
+                                    + VIS_CORNER_GAP_RATIO*visual_roi_height
                                     + VIS_CORNER_HEIGHT_RATIO*visual_roi_height
                                 ],
                             ],
@@ -333,29 +340,29 @@ class HRIVisualizer:
                         ptsBottomRight = np.array(
                             [
                                 [
-                                    visual_roi_x \
-                                    + visual_roi_width\
-                                    - VIS_CORNER_GAP_RATIO*visual_roi_width \
+                                    visual_roi_x
+                                    + visual_roi_width
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_width
                                     - VIS_CORNER_WIDTH_RATIO*visual_roi_width,
-                                    visual_roi_y \
-                                    + visual_roi_height \
+                                    visual_roi_y
+                                    + visual_roi_height
                                     - VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    visual_roi_x \
-                                    + visual_roi_width\
+                                    visual_roi_x
+                                    + visual_roi_width
                                     - VIS_CORNER_GAP_RATIO*visual_roi_width,
-                                    visual_roi_y \
-                                    + visual_roi_height \
+                                    visual_roi_y
+                                    + visual_roi_height
                                     - VIS_CORNER_GAP_RATIO*visual_roi_height
                                 ],
                                 [
-                                    visual_roi_x \
-                                    + visual_roi_width\
+                                    visual_roi_x
+                                    + visual_roi_width
                                     - VIS_CORNER_GAP_RATIO*visual_roi_width,
-                                    visual_roi_y \
-                                    + visual_roi_height \
-                                    - VIS_CORNER_GAP_RATIO*visual_roi_height \
+                                    visual_roi_y
+                                    + visual_roi_height
+                                    - VIS_CORNER_GAP_RATIO*visual_roi_height
                                     - VIS_CORNER_HEIGHT_RATIO*visual_roi_height
                                 ],
                             ],
@@ -364,7 +371,8 @@ class HRIVisualizer:
 
                         img = cv2.polylines(
                             img,
-                            [ptsTopLeft, ptsBottomLeft, ptsBottomRight, ptsTopRight],
+                            [ptsTopLeft, ptsBottomLeft,
+                                ptsBottomRight, ptsTopRight],
                             isClosed=False,
                             color=PASTEL_YELLOW,
                             thickness=THICKNESS_CORNERS,
@@ -392,14 +400,19 @@ class HRIVisualizer:
                         # be outside of the image.
                         roi_corner = np.array(
                             [
-                                face_x + (self.persons[person].max_distance_corner[0] / width * face_width),
-                                face_y + (self.persons[person].max_distance_corner[1] / height * face_height),
+                                face_x +
+                                (self.persons[person].max_distance_corner[0] /
+                                 width * face_width),
+                                face_y +
+                                (self.persons[person].max_distance_corner[1] /
+                                 height * face_height),
                             ]
                         )
-                        label_to_corner = np.array(self.persons[person].max_distance_corner) - roi_corner
-                        label_to_corner_distance = np.linalg.norm([roi_corner[0] \
+                        label_to_corner = np.array(
+                            self.persons[person].max_distance_corner) - roi_corner
+                        label_to_corner_distance = np.linalg.norm([roi_corner[0]
                                                                    - self.persons[person].max_distance_corner[0],
-                                                                   roi_corner[1] \
+                                                                   roi_corner[1]
                                                                    - self.persons[person].max_distance_corner[1]],
                                                                   2)
                         label_corner = (
@@ -427,14 +440,20 @@ class HRIVisualizer:
                             ]
                             roi_corner = np.array(
                                 [
-                                    face_x + (self.persons[person].max_distance_corner[0] / width * face_width),
-                                    face_y + (self.persons[person].max_distance_corner[1] / height * face_height),
+                                    face_x +
+                                    (self.persons[person].max_distance_corner[0] /
+                                     width * face_width),
+                                    face_y +
+                                    (self.persons[person].max_distance_corner[1] /
+                                     height * face_height),
                                 ]
                             )
-                            label_to_corner = np.array(self.persons[person].max_distance_corner) - roi_corner
+                            label_to_corner = np.array(
+                                self.persons[person].max_distance_corner) - roi_corner
                             label_corner = (
                                 roi_corner
-                                + (label_to_corner / np.linalg.norm(label_to_corner, 2))
+                                + (label_to_corner /
+                                   np.linalg.norm(label_to_corner, 2))
                                 * LABEL_DISTANCE
                             )
 
@@ -458,13 +477,15 @@ class HRIVisualizer:
                         )
                         if roi_corner_opposite[0] == 0:
                             label_top_left_x = label_corner[0]
-                            label_bottom_right_x = label_corner[0] + label_width
+                            label_bottom_right_x = label_corner[0] + \
+                                label_width
                         else:
                             label_top_left_x = label_corner[0] - label_width
                             label_bottom_right_x = label_corner[0]
                         if roi_corner_opposite[1] == 0:
                             label_top_left_y = label_corner[1]
-                            label_bottom_right_y = label_corner[1] + LABEL_HEIGHT
+                            label_bottom_right_y = label_corner[1] + \
+                                LABEL_HEIGHT
                         else:
                             label_top_left_y = label_corner[1] - LABEL_HEIGHT
                             label_bottom_right_y = label_corner[1]
@@ -477,12 +498,14 @@ class HRIVisualizer:
                             -1,
                             lineType=cv2.LINE_AA,
                         )
-                        
-                        text_width, text_height = font.getsize(self.persons[person].id_to_display)
+
+                        text_width, text_height = font.getsize(
+                            self.persons[person].id_to_display)
 
                         text_top_left = [
                             label_top_left_x + (label_width - text_width) / 2,
-                            label_top_left_y + (LABEL_HEIGHT - text_height) / 2,
+                            label_top_left_y +
+                            (LABEL_HEIGHT - text_height) / 2,
                         ]
                         text_top_left = np.array(text_top_left, dtype=int)
 
@@ -501,7 +524,8 @@ class HRIVisualizer:
                                       font=self.font,
                                       fill=TEXT_BLACK)
 
-                        img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+                        img = cv2.cvtColor(
+                            np.array(pil_img), cv2.COLOR_RGB2BGR)
 
                 for id in list(self.bodies):
                     skeleton = self.bodies[id][1]
@@ -535,7 +559,8 @@ class HRIVisualizer:
                             skeleton[Skeleton2D.RIGHT_ANKLE],
                         ]
 
-                        skeleton_lines_segments = [upper_chain, body, left_leg, right_leg]
+                        skeleton_lines_segments = [
+                            upper_chain, body, left_leg, right_leg]
 
                         for joint in joints_to_draw:
                             joint_x = int(skeleton[joint].x * width)
@@ -563,25 +588,30 @@ class HRIVisualizer:
 
                 if self.compressed_output:
                     img_msg = CompressedImage()
-                    img_msg.header.stamp = rospy.Time.now()
+                    img_msg.header.stamp = self.get_clock().now().to_msg()
                     img_msg.format = "jpeg"
-                    img_msg.data = np.array(cv2.imencode(".jpg", img)[1]).tobytes()
+                    img_msg.data = np.array(
+                        cv2.imencode(".jpg", img)[1]).tobytes()
                 else:
                     img_msg = self.bridge.cv2_to_imgmsg(img, "bgr8")
 
-                self.proc_time_ms = (rospy.Time.now() - start_proc_time).to_sec() * 1000
+                # Convert to milliseconds
+                self.proc_time_ms = (
+                    self.get_clock().now() - start_proc_time).nanoseconds / 1e6
                 self.img_pub.publish(img_msg)
 
-    def do_diagnostics(self, event=None):
+    def do_diagnostics(self):
+        """ Periodic function to publish diagnostic messages """
         arr = DiagnosticArray()
-        arr.header.stamp = rospy.Time.now()
+        arr.header.stamp = self.get_clock().now().to_msg()
 
-        msg = DiagnosticStatus(name="Social perception: Visualization", hardware_id="none")
+        msg = DiagnosticStatus(
+            name="Social perception: Visualization", hardware_id="none")
         msg.level = DiagnosticStatus.OK
         msg.values = [
             KeyValue(key="Package name", value='hri_visualization'),
-            KeyValue(key="Rendering time",
-                     value="{:.2f}".format(self.proc_time_ms) + "ms"),
+            # Update with actual rendering time if needed
+            KeyValue(key="Rendering time", value="Not Calculated")
         ]
 
         arr.status = [msg]
@@ -612,22 +642,34 @@ class HRIVisualizer:
         self.fontsize = 1
         label = LARGEST_LETTER * number_of_letters
         label_width = SPACE_PER_CHARACTER * number_of_letters
+
+        # Ensure FONT is a string
         font = ImageFont.truetype(FONT, self.fontsize)
         text_width, text_height = font.getsize(label)
+
         while text_width < (label_width - 10) and text_height < (LABEL_HEIGHT - 6):
             self.fontsize += 1
             font = ImageFont.truetype(FONT, self.fontsize)
             text_size, text_height = font.getsize(label)
+
         self.fontsize -= 2
         return ImageFont.truetype(FONT, self.fontsize)
 
 
+def main(args=None):
+    # Initialize the ROS2 system
+    rclpy.init(args=args)
+
+    # Create the HRIVisualizer node
+    visualizer = HRIVisualizer()
+
+    # Spin the visualizer node
+    rclpy.spin(visualizer)
+
+    # Clean up
+    visualizer.destroy_node()
+    rclpy.shutdown()
+
+
 if __name__ == "__main__":
-    rospy.init_node("hri_visualization")
-
-    funny_names = rospy.get_param("~funny_names", False)
-    compressed_output = rospy.get_param("~compressed_output", False)
-
-    visualizer = HRIVisualizer(funny_names, compressed_output)
-
-    rospy.spin()
+    main()
