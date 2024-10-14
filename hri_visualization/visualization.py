@@ -189,6 +189,22 @@ class HRIVisualizer(Node):
             + " " \
             + iconic_pokemons[random_name_index]
 
+    def get_expression_image(self, expression):
+        """Assuming expression is of type Happy, Sad, Neutral,
+        find their respective emoji directories like happy.png
+        """
+        filename = f"{expression.lower()}.png"
+        image_path = Path(package_path) / 'images' / \
+            filename
+        try:
+            image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+            if image is None:
+                raise FileNotFoundError(f"Image file '{filename}' not found.")
+            return image
+        except Exception as e:
+            print(f"Error loading image: {e}")
+            return None
+
     def img_cb(self, msg):
         """ Callback managing the incoming images.
             It draws the bounding boxes for the
@@ -521,9 +537,31 @@ class HRIVisualizer(Node):
                                       id,
                                       font=self.font,
                                       fill=TEXT_BLACK)
-
                         img = cv2.cvtColor(
                             np.array(pil_img), cv2.COLOR_RGB2BGR)
+                        # Print expression if any by emoji
+                        if face.expression:
+                            expression = str(face.expression).split(
+                                '.')[-1].title()
+                            # Load the emoji image
+                            emoji_image = self.get_expression_image(expression)
+                            if emoji_image is not None:
+                                emoji_size = (50, 50)
+                                emoji_image = cv2.resize(
+                                    emoji_image, emoji_size)
+
+                                white_background = np.ones(
+                                    (emoji_size[1], emoji_size[0], 3), dtype=np.uint8) * 255
+
+                                white_background[0:emoji_size[1],
+                                                 0:emoji_size[0]] = emoji_image
+
+                                emoji_x = face_x + face_width
+                                emoji_y = face_y
+                                img[emoji_y:emoji_y + emoji_size[1],
+                                    emoji_x:emoji_x + emoji_size[0]] = emoji_image
+                                # img[emoji_y:emoji_y + emoji_size[1],
+                                #    emoji_x:emoji_x + emoji_size[0]] = white_background
 
                 for id in list(self.bodies):
                     skeleton = self.bodies[id][1]

@@ -11,8 +11,6 @@
 
   <author email="lorenzo.ferrini@pal-robotics.com">Lorenzo Ferrini</author>
 
-  <buildtool_depend>ament_python</buildtool_depend>
-
   <exec_depend>rclpy</exec_depend>
   <exec_depend>pyhri</exec_depend>
   <exec_depend>hri_msgs</exec_depend>
