@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.0.0 (2024-10-15)
+------------------
 * Apache 2.0 license
 * use pal config for params and add licenses
 * fine tune placement of emotion emoji + colorization

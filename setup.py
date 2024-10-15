@@ -6,7 +6,7 @@ package_name = 'hri_visualization'
 
 setup(
     name=package_name,
-    version='1.9.9',
+    version='2.0.0',
     packages=[package_name],
     install_requires=[],
     zip_safe=True,
