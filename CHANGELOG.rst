@@ -2,6 +2,16 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Apache 2.0 license
+* use pal config for params and add licenses
+* fine tune placement of emotion emoji + colorization
+* new expression icons + fix alpha compositing
+* display emotion emoji
+* port to ros2
+* Contributors: Sara Cooper, Séverin Lemaignan
+
 0.1.7 (2023-07-05)
 ------------------
 * change RoI message type to normalized one
