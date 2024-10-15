@@ -3,12 +3,12 @@
 <package format="3">
   <name>hri_visualization</name>
   <version>1.9.9</version>
-  <description>Nodes to visualize body and face detection results</description>
+  <description>ROS4HRI-compatible node to visualize body and face detection results</description>
 
   <maintainer email="lorenzo.ferrini@pal-robotics.com">Lorenzo Ferrini</maintainer>
   <maintainer email="sara.cooper@pal-robotics.com">Sara Cooper</maintainer>
 
-  <license>BSD</license>
+  <license>Apache License 2.0</license>
 
   <author email="lorenzo.ferrini@pal-robotics.com">Lorenzo Ferrini</author>
 
@@ -22,6 +22,7 @@
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
   <exec_depend>launch_pal</exec_depend>
+
   <export>
     <build_type>ament_python</build_type>
   </export>
