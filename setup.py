@@ -6,14 +6,14 @@ package_name = 'hri_visualization'
 
 setup(
     name=package_name,
-    version='0.0.1',
+    version='1.9.9',
     packages=[package_name],
     install_requires=[],
     zip_safe=True,
     maintainer='Lorenzo Ferrini',
     maintainer_email='lorenzo.ferrini@pal-robotics.com',
-    description='Nodes to visualize body and face detection results',
-    license='BSD',
+    description='ROS4HRI-compatible node to visualize body and face detection results',
+    license='Apache 2.0',
     entry_points={
         'console_scripts': [
             'visualization = hri_visualization.visualization:main',
@@ -23,6 +23,9 @@ setup(
         ('share/' + package_name + '/fonts/Montserrat', glob('fonts/Montserrat/*')),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
         ('share/' + package_name + '/images', glob('images/*')),
+        ('share/ament_index/resource_index/pal_configuration.' + package_name,
+            ['config/' + package_name]),
+        ('share/' + package_name + '/config', ['config/00-defaults.yml']),
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/ament_index/resource_index/pal_system_module',

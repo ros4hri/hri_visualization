@@ -34,10 +34,8 @@ LABEL_LINE_THICKNESS = 1
 JOINT_RADIUS = 15
 JOINT_THICKNESS = -1
 
-# Use ament_index to get the package's share directory in ROS2
 package_path = Path(get_package_share_directory("hri_visualization"))
 
-# Define font path using pathlib's Path
 FONTS_FOLDER = package_path / "fonts"
 FONT = str(FONTS_FOLDER / "Montserrat/Montserrat-SemiBold.ttf")
 LARGEST_LETTER = "M"
@@ -117,7 +115,7 @@ class HRIVisualizer(Node):
         self.body_sub = self.create_subscription(
             IdsList, "/humans/bodies/tracked", self.body_cb, 1)
         self.img_sub = self.create_subscription(
-            Image, "/image", self.img_cb, 1)
+            Image, self.image_topic, self.img_cb, 1)
 
         if self.image_topic.endswith("/image_raw"):
             fixed_name_length = len(self.image_topic) - len("image_raw")
@@ -543,26 +541,46 @@ class HRIVisualizer(Node):
                         if face.expression:
                             expression = str(face.expression).split(
                                 '.')[-1].title()
-                            # Load the emoji image
+                            print(expression)
+
                             emoji_image = self.get_expression_image(expression)
 
                             if emoji_image is not None:
                                 emoji_size = (40, 40)
                                 emoji_image = cv2.resize(
                                     emoji_image, emoji_size)
-                                emoji_bgr = emoji_image[:, :, :3] + PASTEL_YELLOW
+                                emoji_bgr = emoji_image[:,
+                                                        :, :3] + PASTEL_YELLOW
                                 emoji_mask = emoji_image[:, :, 3]
 
                                 emoji_x = face_x + face_width + 2
                                 emoji_y = face_y - emoji_size[1] - 2
 
+                                if emoji_y < 0:
+                                    emoji_y = face_y + face_height + 2
+
+                                elif emoji_x + emoji_size[0] > img.shape[1]:
+
+                                    emoji_x = img.shape[1] - emoji_size[0] - 2
+                                elif emoji_y + emoji_size[1] > img.shape[0]:
+                                    emoji_y = img.shape[0] - emoji_size[1] - 2
+
+                                if (emoji_y + emoji_size[1] > img.shape[0]) or (emoji_x + emoji_size[0] > img.shape[1]):
+                                    emoji_x = face_x + face_width - \
+                                        emoji_size[0]
+                                    emoji_y = face_y + face_height
+
+                                emoji_x = max(0, emoji_x)
+                                emoji_y = max(0, emoji_y)
+
                                 roi = img[emoji_y:emoji_y + emoji_size[1],
                                           emoji_x:emoji_x + emoji_size[0]]
                                 alpha_mask = emoji_mask / 255.0
 
-                                for c in range(0, 3):  # Loop over B, G, R channels
-                                    roi[:, :, c] = (alpha_mask * emoji_bgr[:, :, c] + (1 - alpha_mask) * roi[:, :, c])
-                                          
+                                for c in range(0, 3):
+                                    roi[:, :, c] = (
+                                        alpha_mask * emoji_bgr[:, :, c] + (1 - alpha_mask) * roi[:, :, c])
+
                                 img[emoji_y:emoji_y + emoji_size[1],
                                     emoji_x:emoji_x + emoji_size[0]] = roi
 
