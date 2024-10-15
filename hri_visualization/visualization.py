@@ -547,14 +547,14 @@ class HRIVisualizer(Node):
                             emoji_image = self.get_expression_image(expression)
 
                             if emoji_image is not None:
-                                emoji_size = (50, 50)
+                                emoji_size = (40, 40)
                                 emoji_image = cv2.resize(
                                     emoji_image, emoji_size)
-                                emoji_bgr = emoji_image[:, :, :3]
+                                emoji_bgr = emoji_image[:, :, :3] + PASTEL_YELLOW
                                 emoji_mask = emoji_image[:, :, 3]
 
-                                emoji_x = face_x + face_width
-                                emoji_y = face_y
+                                emoji_x = face_x + face_width + 2
+                                emoji_y = face_y - emoji_size[1] - 2
 
                                 roi = img[emoji_y:emoji_y + emoji_size[1],
                                           emoji_x:emoji_x + emoji_size[0]]
