@@ -23,5 +23,12 @@ setup(
         ('share/' + package_name + '/fonts/Montserrat', glob('fonts/Montserrat/*')),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
         ('share/' + package_name + '/images', glob('images/*')),
+        ('share/ament_index/resource_index/packages',
+            ['resource/' + package_name]),
+        ('share/ament_index/resource_index/pal_system_module',
+         ['module/' + package_name]),
+        ('share/' + package_name + '/module',
+         ['module/hri_visualization_module.yaml']),
+
     ],
 )

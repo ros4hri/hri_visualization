@@ -1,0 +1,2 @@
+hri_visualization:
+  launch: "hri_visualization hri_visualization.launch.py"
