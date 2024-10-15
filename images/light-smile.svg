@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 496 512"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="light-smile.svg"
+   inkscape:version="1.3.2 (091e20ef0f, 2023-11-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="0.71673387"
+     inkscape:cx="219.74684"
+     inkscape:cy="525.29958"
+     inkscape:window-width="1920"
+     inkscape:window-height="1043"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg1" />
+  <!-- Font Awesome Free 5.15.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) -->
+  <path
+     d="M 248,8 C 111,8 0,119 0,256 0,393 111,504 248,504 385,504 496,393 496,256 496,119 385,8 248,8 Z m 80,168 c 17.7,0 32,14.3 32,32 0,17.7 -14.3,32 -32,32 -17.7,0 -32,-14.3 -32,-32 0,-17.7 14.3,-32 32,-32 z m -160,0 c 17.7,0 32,14.3 32,32 0,17.7 -14.3,32 -32,32 -17.7,0 -32,-14.3 -32,-32 0,-17.7 14.3,-32 32,-32 z m 80,224 c -44.5,0 -70.72494,-8.99878 -110.02303,-29.91648 -18.65262,-10.00099 -3.47621,-38.21316 15.04606,-28.26704 C 183.87976,358.18297 213,367.9 248,367.9 c 35,0 64.12024,-9.71703 94.97697,-26.08352 18.52227,-9.94612 33.69868,18.26605 15.04606,28.26704 C 318.72494,391.00122 292.5,400 248,400 Z"
+     id="path1"
+     sodipodi:nodetypes="sssssssssssssssccccccc" />
+</svg>

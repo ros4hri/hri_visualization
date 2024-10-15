@@ -545,23 +545,26 @@ class HRIVisualizer(Node):
                                 '.')[-1].title()
                             # Load the emoji image
                             emoji_image = self.get_expression_image(expression)
+
                             if emoji_image is not None:
                                 emoji_size = (50, 50)
                                 emoji_image = cv2.resize(
                                     emoji_image, emoji_size)
-
-                                white_background = np.ones(
-                                    (emoji_size[1], emoji_size[0], 3), dtype=np.uint8) * 255
-
-                                white_background[0:emoji_size[1],
-                                                 0:emoji_size[0]] = emoji_image
+                                emoji_bgr = emoji_image[:, :, :3]
+                                emoji_mask = emoji_image[:, :, 3]
 
                                 emoji_x = face_x + face_width
                                 emoji_y = face_y
+
+                                roi = img[emoji_y:emoji_y + emoji_size[1],
+                                          emoji_x:emoji_x + emoji_size[0]]
+                                alpha_mask = emoji_mask / 255.0
+
+                                for c in range(0, 3):  # Loop over B, G, R channels
+                                    roi[:, :, c] = (alpha_mask * emoji_bgr[:, :, c] + (1 - alpha_mask) * roi[:, :, c])
+                                          
                                 img[emoji_y:emoji_y + emoji_size[1],
-                                    emoji_x:emoji_x + emoji_size[0]] = emoji_image
-                                # img[emoji_y:emoji_y + emoji_size[1],
-                                #    emoji_x:emoji_x + emoji_size[0]] = white_background
+                                    emoji_x:emoji_x + emoji_size[0]] = roi
 
                 for id in list(self.bodies):
                     skeleton = self.bodies[id][1]
