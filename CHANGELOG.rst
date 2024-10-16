@@ -2,6 +2,13 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* enable pytest
+* fix remapping
+* adjust output overlay topic and label position
+* Contributors: Sara Cooper, Séverin Lemaignan
+
 2.0.0 (2024-10-15)
 ------------------
 * Apache 2.0 license
