@@ -20,6 +20,7 @@ setup(
         ],
     },
     data_files=[
+        ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/fonts/Montserrat', glob('fonts/Montserrat/*')),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
         ('share/' + package_name + '/images', glob('images/*')),

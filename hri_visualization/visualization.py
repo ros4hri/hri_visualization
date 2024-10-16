@@ -104,10 +104,8 @@ class HRIVisualizer(Node):
         super().__init__('hri_visualization')
         self.declare_parameter('funny_names', False)
         self.declare_parameter('compressed_output', False)
-        self.declare_parameter('image_topic', '/image')
         self.funny_names = self.get_parameter('funny_names').value
         self.compressed_output = self.get_parameter('compressed_output').value
-        self.image_topic = self.get_parameter('image_topic').value
         self.font = self.calibrate_font_size(5)
 
         self.hri_listener = HRIListener('hri_listener')
@@ -115,13 +113,8 @@ class HRIVisualizer(Node):
         self.body_sub = self.create_subscription(
             IdsList, "/humans/bodies/tracked", self.body_cb, 1)
         self.img_sub = self.create_subscription(
-            Image, self.image_topic, self.img_cb, 1)
-        if self.image_topic.endswith("/image_raw"):
-            fixed_name_length = len(self.image_topic) - len("image_raw")
-            self.hri_overlay_topic = self.image_topic[:
-                                                      fixed_name_length] + "hri_overlay"
-        else:
-            self.hri_overlay_topic = self.image_topic + "/hri_overlay"
+            Image, "/image", self.img_cb, 1)
+        self.hri_overlay_topic = self.img_sub.topic_name + "/hri_overlay"
 
         if self.compressed_output:
             self.img_pub = self.create_publisher(

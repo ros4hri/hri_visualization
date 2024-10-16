@@ -19,7 +19,6 @@ def generate_launch_description():
         parameters=config["parameters"],
         remappings=config["remappings"],
         arguments=config["arguments"],
-
     )
 
     ld.add_action(hri_visualization_node)
