@@ -192,7 +192,7 @@ class HRIVisualizer(Node):
                 raise FileNotFoundError(f"Image file '{filename}' not found.")
             return image
         except Exception as e:
-            print(f"Error loading image: {e}")
+            self.get_logger().error(f"Error loading image: {e}")
             return None
 
     def img_cb(self, msg):

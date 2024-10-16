@@ -9,6 +9,7 @@ setup(
     version='2.0.0',
     packages=[package_name],
     install_requires=[],
+    tests_require=['pytest'],
     zip_safe=True,
     maintainer='Lorenzo Ferrini',
     maintainer_email='lorenzo.ferrini@pal-robotics.com',
