@@ -2,4 +2,4 @@
   ros__parameters:
     funny_names: false
     compressed_output: false
-    image_topic: /image_raw
+    image_topic: /camera1/image_raw

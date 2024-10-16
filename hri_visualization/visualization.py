@@ -116,7 +116,6 @@ class HRIVisualizer(Node):
             IdsList, "/humans/bodies/tracked", self.body_cb, 1)
         self.img_sub = self.create_subscription(
             Image, self.image_topic, self.img_cb, 1)
-
         if self.image_topic.endswith("/image_raw"):
             fixed_name_length = len(self.image_topic) - len("image_raw")
             self.hri_overlay_topic = self.image_topic[:
@@ -502,6 +501,20 @@ class HRIVisualizer(Node):
                             label_top_left_y = label_corner[1] - LABEL_HEIGHT
                             label_bottom_right_y = label_corner[1]
 
+                        if label_top_left_x < 0:
+                            label_top_left_x = 0
+                            label_bottom_right_x = label_width
+                        elif label_bottom_right_x > width:
+                            label_bottom_right_x = width
+                            label_top_left_x = width - label_width
+
+                        if label_top_left_y < 0:
+                            label_top_left_y = 0
+                            label_bottom_right_y = LABEL_HEIGHT
+                        elif label_bottom_right_y > height:
+                            label_bottom_right_y = height
+                            label_top_left_y = height - LABEL_HEIGHT
+
                         img = cv2.rectangle(
                             img,
                             (label_top_left_x, label_top_left_y),
@@ -515,12 +528,11 @@ class HRIVisualizer(Node):
                             self.persons[person].id_to_display)
 
                         text_top_left = [
-                            label_top_left_x + (label_width - text_width) / 2,
+                            label_top_left_x + (label_width - text_width) // 2,
                             label_top_left_y +
-                            (LABEL_HEIGHT - text_height) / 2,
+                            (LABEL_HEIGHT - text_height) // 2,
                         ]
                         text_top_left = np.array(text_top_left, dtype=int)
-
                         rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                         pil_img = PILImage.fromarray(rgb_img)
 
@@ -541,8 +553,6 @@ class HRIVisualizer(Node):
                         if face.expression:
                             expression = str(face.expression).split(
                                 '.')[-1].title()
-                            print(expression)
-
                             emoji_image = self.get_expression_image(expression)
 
                             if emoji_image is not None:
