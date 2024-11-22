@@ -250,14 +250,14 @@ class HRIVisualizer(Node):
                 (height, width, _) = img.shape
                 for person in list(self.persons):
                     face = tracked_persons[person].face
-                    if face and face.roi:
+                    if face and (roi := face.roi):
                         # Label sizing calibration
                         label_width = self.persons[person].label_width
                         font = self.persons[person].font
-                        face_x = int(face.roi[0] * width)
-                        face_y = int(face.roi[1] * height)
-                        face_width = int(face.roi[2] * width)
-                        face_height = int(face.roi[3] * height)
+                        face_x = int(roi[0] * width)
+                        face_y = int(roi[1] * height)
+                        face_width = int(roi[2] * width)
+                        face_height = int(roi[3] * height)
 
                         starting_point = (
                             face_x,
@@ -565,9 +565,8 @@ class HRIVisualizer(Node):
                         img = cv2.cvtColor(
                             np.array(pil_img), cv2.COLOR_RGB2BGR)
                         # Print expression if any by emoji
-                        if face.expression:
-                            expression = str(face.expression).split(
-                                '.')[-1].title()
+                        if face and (expression := face.expression):
+                            expression = str(expression).split('.')[-1].title()
                             emoji_image = self.get_expression_image(expression)
 
                             if emoji_image is not None:
