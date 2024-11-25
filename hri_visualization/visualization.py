@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from hri_msgs.msg import IdsList, Skeleton2D
 from sensor_msgs.msg import Image, CompressedImage
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
@@ -113,15 +114,15 @@ class HRIVisualizer(Node):
         self.body_sub = self.create_subscription(
             IdsList, "/humans/bodies/tracked", self.body_cb, 1)
         self.img_sub = self.create_subscription(
-            Image, "/image", self.img_cb, 1)
+            Image, "/image", self.img_cb, qos_profile=qos_profile_sensor_data)
         self.hri_overlay_topic = self.img_sub.topic_name + "/hri_overlay"
 
         if self.compressed_output:
             self.img_pub = self.create_publisher(
-                CompressedImage, self.hri_overlay_topic + "/compressed", 1)
+                CompressedImage, self.hri_overlay_topic + "/compressed", qos_profile=qos_profile_sensor_data)
         else:
             self.img_pub = self.create_publisher(
-                Image, self.hri_overlay_topic, 1)
+                Image, self.hri_overlay_topic, qos_profile=qos_profile_sensor_data)
 
         diag_period = self.declare_parameter("diagnostic_period", 1.0).value
         self.diag_pub = self.create_publisher(
