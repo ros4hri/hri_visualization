@@ -103,7 +103,7 @@ class HRIVisualizer(Node):
         """ Constructor """
         super().__init__('hri_visualization')
         self.declare_parameter('funny_names', False)
-        self.declare_parameter('compressed_output', False)
+        self.declare_parameter('compressed_output', True)
         self.funny_names = self.get_parameter('funny_names').value
         self.compressed_output = self.get_parameter('compressed_output').value
         self.font = self.calibrate_font_size(5)

@@ -1,4 +1,4 @@
 /hri_visualization:
   ros__parameters:
     funny_names: false
-    compressed_output: false
+    compressed_output: true
