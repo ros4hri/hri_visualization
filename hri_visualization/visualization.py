@@ -43,6 +43,7 @@ LARGEST_LETTER = "M"
 VIS_CORNER_GAP_RATIO = 0.1
 VIS_CORNER_WIDTH_RATIO = 0.1
 VIS_CORNER_HEIGHT_RATIO = 0.1
+EMOJI_SIZE_MAGIC_NUMBER = 0.0625
 
 # 2D skeleton joints
 # related to face keypoints won't be drawn
@@ -570,7 +571,8 @@ class HRIVisualizer(Node):
                             emoji_image = self.get_expression_image(expression)
 
                             if emoji_image is not None:
-                                emoji_size = (40, 40)
+                                emoji_size = (int(img.shape[1]*EMOJI_SIZE_MAGIC_NUMBER),
+                                              int(img.shape[1]*EMOJI_SIZE_MAGIC_NUMBER))
                                 emoji_image = cv2.resize(
                                     emoji_image, emoji_size)
                                 emoji_bgr = emoji_image[:,
@@ -583,27 +585,18 @@ class HRIVisualizer(Node):
                                 if emoji_y < 0:
                                     emoji_y = face_y + face_height + 2
 
-                                elif emoji_x + emoji_size[0] > img.shape[1]:
-
-                                    emoji_x = img.shape[1] - emoji_size[0] - 2
-                                elif emoji_y + emoji_size[1] > img.shape[0]:
-                                    emoji_y = img.shape[0] - emoji_size[1] - 2
-
-                                if (emoji_y + emoji_size[1] > img.shape[0]) or (emoji_x + emoji_size[0] > img.shape[1]):
-                                    emoji_x = face_x + face_width - \
-                                        emoji_size[0]
-                                    emoji_y = face_y + face_height
+                                if emoji_x + emoji_size[1] > img.shape[1]:
+                                    emoji_x = face_x - emoji_size[1] - 2
 
                                 emoji_x = max(0, emoji_x)
-                                emoji_y = max(0, emoji_y)
+                                emoji_y = min(emoji_y, img.shape[0] - emoji_size[0])
 
                                 roi = img[emoji_y:emoji_y + emoji_size[1],
                                           emoji_x:emoji_x + emoji_size[0]]
+
                                 alpha_mask = emoji_mask / 255.0
 
-                                for c in range(0, 3):
-                                    roi[:, :, c] = (
-                                        alpha_mask * emoji_bgr[:, :, c] + (1 - alpha_mask) * roi[:, :, c])
+                                roi = alpha_mask[:, :, None] * emoji_bgr + (1 - alpha_mask)[:, :, None] * roi
 
                                 img[emoji_y:emoji_y + emoji_size[1],
                                     emoji_x:emoji_x + emoji_size[0]] = roi
