@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 496 496"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="neutral.svg"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   width="496"
+   height="496"
+   inkscape:export-filename="/home/lorenzofe/docker_ex_interaction_sim/src/hri_visualization/images/neutral.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.1251306"
+     inkscape:cx="231.52868"
+     inkscape:cy="269.74647"
+     inkscape:window-width="1850"
+     inkscape:window-height="1016"
+     inkscape:window-x="70"
+     inkscape:window-y="27"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg1"
+     inkscape:pageshadow="2"
+     showgrid="false" />
+  <!-- Font Awesome Free 5.15.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) -->
+  <path
+     d="M 248,0 C 111,0 0,111 0,248 0,385 111,496 248,496 385,496 496,385 496,248 496,111 385,0 248,0 Z m 80,168 c 17.7,0 32,14.3 32,32 0,17.7 -14.3,32 -32,32 -17.7,0 -32,-14.3 -32,-32 0,-17.7 14.3,-32 32,-32 z m -160,0 c 17.7,0 32,14.3 32,32 0,17.7 -14.3,32 -32,32 -17.7,0 -32,-14.3 -32,-32 0,-17.7 14.3,-32 32,-32 z m 80,224 c -44.5,0 -70.72494,-8.99878 -110.02303,-29.91648 -18.65262,-10.00099 -20.80155,-2.63546 -2.27928,7.31066 C 166.55442,385.76067 213,392 248,392 c 35,0 85.38762,-5.59987 116.24435,-21.96636 18.52227,-9.94612 12.4313,-17.95111 -6.22132,-7.95012 C 318.72494,383.00122 292.5,392 248,392 Z"
+     id="path1"
+     sodipodi:nodetypes="sssssssssssssssccccccc" />
+</svg>
