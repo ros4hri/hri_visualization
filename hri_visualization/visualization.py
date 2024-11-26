@@ -104,8 +104,10 @@ class HRIVisualizer(Node):
         """ Constructor """
         super().__init__('hri_visualization')
         self.declare_parameter('funny_names', False)
+        self.declare_parameter('compressed_input', True)
         self.declare_parameter('compressed_output', True)
         self.funny_names = self.get_parameter('funny_names').value
+        self.compressed_input = self.get_parameter('compressed_input').value
         self.compressed_output = self.get_parameter('compressed_output').value
         self.font = self.calibrate_font_size(5)
 
@@ -113,9 +115,18 @@ class HRIVisualizer(Node):
 
         self.body_sub = self.create_subscription(
             IdsList, "/humans/bodies/tracked", self.body_cb, 1)
-        self.img_sub = self.create_subscription(
-            Image, "/image", self.img_cb, qos_profile=qos_profile_sensor_data)
-        self.hri_overlay_topic = self.img_sub.topic_name + "/hri_overlay"
+        resolved_topic_name = self.resolve_topic_name("/image")
+        if self.compressed_input:
+            compressed_image_topic = resolved_topic_name+"/compressed"
+            self.img_sub = self.create_subscription(
+                CompressedImage,
+                compressed_image_topic,
+                self.compressed_img_cb,
+                qos_profile=qos_profile_sensor_data)
+        else:
+            self.img_sub = self.create_subscription(
+                Image, "/image", self.img_cb, qos_profile=qos_profile_sensor_data)
+        self.hri_overlay_topic = resolved_topic_name + "/hri_overlay"
 
         if self.compressed_output:
             self.img_pub = self.create_publisher(
@@ -195,6 +206,16 @@ class HRIVisualizer(Node):
         except Exception as e:
             self.get_logger().error(f"Error loading image: {e}")
             return None
+
+    def compressed_img_cb(self, msg):
+        """ Callback managing the incoming images.
+            It performs the same operations as
+            img_cb, but with compressed images
+        """
+        img = self.bridge.compressed_imgmsg_to_cv2(msg)
+        img_msg = self.bridge.cv2_to_imgmsg(img, "bgr8")
+        img_msg.header = msg.header
+        self.img_cb(img_msg)
 
     def img_cb(self, msg):
         """ Callback managing the incoming images.
