@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.2.0 (2024-11-27)
+------------------
 * removed light smile from neutral emoji
 * improved emoji visualization
   - bug fixing -- hri_visualization was crashing when face height
