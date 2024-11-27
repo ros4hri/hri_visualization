@@ -2,6 +2,20 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* removed light smile from neutral emoji
+* improved emoji visualization
+  - bug fixing -- hri_visualization was crashing when face height
+  was bigger than image height.
+  - the emoji size is now proportional to the image width.
+* mitigate 'vanishing hrilistener face' crash
+  We make a copy of the face ROI and expression *when* we check for their existence
+* supporting compressed input
+* camera subscribers and publishers to use sensor data qos
+* using compressed images by default
+* Contributors: Séverin Lemaignan, lorenzoferrini
+
 2.1.0 (2024-10-16)
 ------------------
 * enable pytest
