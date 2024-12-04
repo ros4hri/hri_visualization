@@ -32,8 +32,8 @@ LABEL_WIDTH = 80
 LABEL_HEIGHT = 30
 SPACE_PER_CHARACTER = 14
 LABEL_LINE_THICKNESS = 1
-JOINT_RADIUS = 15
-JOINT_THICKNESS = -1
+JOINT_RADIUS = 10
+FILLED = -1
 
 package_path = Path(get_package_share_directory("hri_visualization"))
 
@@ -114,8 +114,6 @@ class HRIVisualizer(Node):
 
         self.hri_listener = HRIListener('hri_listener')
 
-        self.body_sub = self.create_subscription(
-            IdsList, "/humans/bodies/tracked", self.body_cb, 1)
         resolved_topic_name = self.resolve_topic_name("/image")
         if self.compressed_input:
             compressed_image_topic = resolved_topic_name+"/compressed"
@@ -151,22 +149,7 @@ class HRIVisualizer(Node):
 
         self.persons_lock = Lock()
 
-    def body_cb(self, msg):
-        """ Callback storing information regarding the detected bodies """
-        for id in msg.ids:
-            if id not in self.bodies:
-                skeleton_topic = f"/humans/bodies/{id}/skeleton2d"
-                self.bodies[id] = [
-                    self.create_subscription(
-                        Skeleton2D, skeleton_topic, self.skeleton_cb, 1),
-                    None,
-                ]
-
-        for id in list(self.bodies):
-            if id not in msg.ids:
-                # Unregister the subscription in ROS2
-                self.bodies[id][0].destroy()
-                del self.bodies[id]
+        self.persons_lock = Lock()
 
     def skeleton_cb(self, skeleton_msg, args):
         """ Callback storing information regarding
@@ -637,15 +620,15 @@ class HRIVisualizer(Node):
                             upper_chain, body, left_leg, right_leg]
 
                         for joint in joints_to_draw:
-                            joint_x = int(skeleton[joint].x * width)
-                            joint_y = int(skeleton[joint].y * height)
+                            joint_x = int(skeleton[joint][0] * width)
+                            joint_y = int(skeleton[joint][1] * height)
                             img = cv2.circle(
-                                img, (joint_x, joint_y), JOINT_RADIUS, PASTEL_YELLOW, JOINT_THICKNESS
+                                img, (joint_x, joint_y), JOINT_RADIUS, PASTEL_YELLOW, FILLED
                             )
 
                         for idx, segment in enumerate(skeleton_lines_segments):
                             segment = [
-                                (int(joint.x * width), int(joint.y * height))
+                                (int(joint[0] * width), int(joint[1] * height))
                                 for joint in segment
                             ]
                             segment = np.array(segment, dtype=np.int32)
