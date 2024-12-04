@@ -24,6 +24,7 @@ from pathlib import Path
 
 # Drawing parameters definition
 PASTEL_YELLOW = (174, 239, 238)
+BLACK = (0, 0, 0)
 TEXT_BLACK = (0, 0, 0, 255)
 BOX_THICKNESS = 3
 THICKNESS_CORNERS = 2
@@ -147,7 +148,7 @@ class HRIVisualizer(Node):
         self.bodies = {}
         self.persons = {}
 
-        self.persons_lock = Lock()
+        self.expressions = {}
 
         self.persons_lock = Lock()
 
@@ -176,10 +177,20 @@ class HRIVisualizer(Node):
             + iconic_pokemons[random_name_index]
 
     def get_expression_image(self, expression):
-        """Assuming expression is of type Happy, Sad, Neutral,
-        find their respective emoji directories like happy.png
-        """
-        filename = f"{expression.lower()}.png"
+        """ Returns the expression-related emoji. """
+        if (expression not in self.expressions) or (self.expressions[expression] is None):
+            filename = f"{expression.lower()}.png"
+            emoji = self.load_image(filename)
+            if emoji is not None:
+                emoji_size = (int(emoji.shape[1]*EMOJI_SIZE_MAGIC_NUMBER),
+                              int(emoji.shape[1]*EMOJI_SIZE_MAGIC_NUMBER))
+                emoji = cv2.resize(emoji, emoji_size)
+                emoji[:, :, :3] = emoji[:, :, :3] + PASTEL_YELLOW
+            self.expressions[expression] = emoji
+
+        return self.expressions[expression]
+
+    def load_image(self, filename):
         image_path = Path(package_path) / 'images' / \
             filename
         try:
@@ -551,42 +562,42 @@ class HRIVisualizer(Node):
                         # Print expression if any by emoji
                         if face and (expression := face.expression):
                             expression = str(expression).split('.')[-1].title()
-                            emoji_image = self.get_expression_image(expression)
+                            emoji = self.get_expression_image(expression)
 
-                            if emoji_image is not None:
-                                emoji_size = (int(img.shape[1]*EMOJI_SIZE_MAGIC_NUMBER),
-                                              int(img.shape[1]*EMOJI_SIZE_MAGIC_NUMBER))
-                                emoji_image = cv2.resize(
-                                    emoji_image, emoji_size)
-                                emoji_bgr = emoji_image[:,
-                                                        :, :3] + PASTEL_YELLOW
-                                emoji_mask = emoji_image[:, :, 3]
+                            if emoji is not None:
+                                emoji_bgr = emoji[:, :, :3]
+                                emoji_mask = emoji[:, :, 3]
 
                                 emoji_x = face_x + face_width + 2
-                                emoji_y = face_y - emoji_size[1] - 2
+                                emoji_y = face_y - emoji.shape[0] - 2
 
                                 if emoji_y < 0:
                                     emoji_y = face_y + face_height + 2
 
-                                if emoji_x + emoji_size[1] > img.shape[1]:
-                                    emoji_x = face_x - emoji_size[1] - 2
+                                if emoji_x + emoji.shape[1] > img.shape[1]:
+                                    emoji_x = face_x - emoji.shape[1] - 2
 
                                 emoji_x = max(0, emoji_x)
-                                emoji_y = min(emoji_y, img.shape[0] - emoji_size[0])
+                                emoji_y = min(emoji_y, img.shape[0] - emoji.shape[0])
 
-                                roi = img[emoji_y:emoji_y + emoji_size[1],
-                                          emoji_x:emoji_x + emoji_size[0]]
+                                img = cv2.circle(img, (int(emoji_x + (emoji.shape[1]/2)), 
+                                                       int(emoji_y + (emoji.shape[0]/2))), 
+                                                 int(min(emoji.shape[0]/2, emoji.shape[1]/2)) - 1,
+                                                 BLACK, FILLED)
+
+                                roi = img[emoji_y:emoji_y + emoji.shape[1],
+                                          emoji_x:emoji_x + emoji.shape[0]]
 
                                 alpha_mask = emoji_mask / 255.0
 
                                 roi = alpha_mask[:, :, None] * emoji_bgr + (1 - alpha_mask)[:, :, None] * roi
 
-                                img[emoji_y:emoji_y + emoji_size[1],
-                                    emoji_x:emoji_x + emoji_size[0]] = roi
+                                img[emoji_y:emoji_y + emoji.shape[1],
+                                    emoji_x:emoji_x + emoji.shape[0]] = roi
 
-                for id in list(self.bodies):
-                    skeleton = self.bodies[id][1]
-                    if skeleton:
+                    body = tracked_persons[person].body
+                    if body and (skeleton:=body.skeleton):
+                        skeleton = list(skeleton.values())
                         upper_chain = [
                             skeleton[Skeleton2D.RIGHT_WRIST],
                             skeleton[Skeleton2D.RIGHT_ELBOW],
