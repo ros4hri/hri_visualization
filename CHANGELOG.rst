@@ -2,6 +2,14 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* added tests
+* general cleanup
+* improving emoji visualization
+* skeletons fix
+* Contributors: lorenzoferrini
+
 2.2.0 (2024-11-27)
 ------------------
 * removed light smile from neutral emoji
