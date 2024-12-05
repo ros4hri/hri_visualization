@@ -1,9 +1,23 @@
 #!/usr/bin/env python3
 
+# Copyright 2024 PAL Robotics
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from hri_msgs.msg import IdsList, Skeleton2D
+from hri_msgs.msg import Skeleton2D
 from sensor_msgs.msg import Image, CompressedImage
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from hri import HRIListener
@@ -88,22 +102,24 @@ adjectives = ['Vegan',
 
 
 class HRIVisualizer(Node):
-    """ A class managing publishing an
-        image stream where information
-        regarding the detected people
-        is displayed
     """
+    Object handling the display of body features over an image stream.
+
+    A class managing publishing an
+    image stream where information
+    regarding the detected people
+    is displayed.
+    """
+
     class PersonDescriptor:
-        """ Internal class used to describe
-            person-related aspects
-        """
+        """Internal class used to describe person-related aspects."""
+
         id_to_display = None
         label_width = None
         font = None
         max_distance_corner = None
 
     def __init__(self):
-        """ Constructor """
         super().__init__('hri_visualization')
         self.declare_parameter('funny_names', False)
         self.declare_parameter('compressed_input', True)
@@ -125,15 +141,21 @@ class HRIVisualizer(Node):
                 qos_profile=qos_profile_sensor_data)
         else:
             self.img_sub = self.create_subscription(
-                Image, "/image", self.img_cb, qos_profile=qos_profile_sensor_data)
+                Image, "/image",
+                self.img_cb,
+                qos_profile=qos_profile_sensor_data)
         self.hri_overlay_topic = resolved_topic_name + "/hri_overlay"
 
         if self.compressed_output:
             self.img_pub = self.create_publisher(
-                CompressedImage, self.hri_overlay_topic + "/compressed", qos_profile=qos_profile_sensor_data)
+                CompressedImage,
+                self.hri_overlay_topic + "/compressed",
+                qos_profile=qos_profile_sensor_data)
         else:
             self.img_pub = self.create_publisher(
-                Image, self.hri_overlay_topic, qos_profile=qos_profile_sensor_data)
+                Image,
+                self.hri_overlay_topic,
+                qos_profile=qos_profile_sensor_data)
 
         diag_period = self.declare_parameter("diagnostic_period", 1.0).value
         self.diag_pub = self.create_publisher(
@@ -153,16 +175,17 @@ class HRIVisualizer(Node):
         self.persons_lock = Lock()
 
     def skeleton_cb(self, skeleton_msg, args):
-        """ Callback storing information regarding
-            a body's skeleton coordinates
-        """
+        """Store information regarding a body's skeleton coordinates."""
         id = args
         self.bodies[id][1] = skeleton_msg.skeleton
 
     def generate_funny_ids(self, person_id):
-        """ Extracting a funny id, which is a combination
-            of an adjective and a name from two 
-            predefined lists
+        """
+        Generate a funny id.
+
+        A funny id is a combination
+        of an adjective and a name from two
+        predefined lists.
         """
         person_id_reverse = person_id[::-1]
         hash_value_adjective = hashlib.md5(
@@ -177,7 +200,7 @@ class HRIVisualizer(Node):
             + iconic_pokemons[random_name_index]
 
     def get_expression_image(self, expression):
-        """ Returns the expression-related emoji. """
+        """Return the expression-related emoji."""
         if (expression not in self.expressions) or (self.expressions[expression] is None):
             filename = f"{expression.lower()}.png"
             emoji = self.load_image(filename)
@@ -203,9 +226,11 @@ class HRIVisualizer(Node):
             return None
 
     def compressed_img_cb(self, msg):
-        """ Callback managing the incoming images.
-            It performs the same operations as
-            img_cb, but with compressed images
+        """
+        Manage the incoming compressed images.
+
+        Function performing the same operations as
+        img_cb, but with compressed images.
         """
         img = self.bridge.compressed_imgmsg_to_cv2(msg)
         img_msg = self.bridge.cv2_to_imgmsg(img, "bgr8")
@@ -213,10 +238,13 @@ class HRIVisualizer(Node):
         self.img_cb(img_msg)
 
     def img_cb(self, msg):
-        """ Callback managing the incoming images.
-            It draws the bounding boxes for the
-            detected faces and the skeletons
-            for the detected bodies
+        """
+        Manage the incoming images.
+
+        Function handling the incoming images,
+        drawing the bounding boxes for the
+        detected faces and the skeleton joints
+        for the detected bodies.
         """
         if not self.persons_lock.locked():
             with self.persons_lock:
@@ -238,7 +266,7 @@ class HRIVisualizer(Node):
                             len(id_displayed))
 
                 for person in list(self.persons.keys()):
-                    if not person in tracked_persons:
+                    if person not in tracked_persons:
                         del self.persons[person]
 
                 img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -431,11 +459,12 @@ class HRIVisualizer(Node):
                         )
                         label_to_corner = np.array(
                             self.persons[person].max_distance_corner) - roi_corner
-                        label_to_corner_distance = np.linalg.norm([roi_corner[0]
-                                                                   - self.persons[person].max_distance_corner[0],
-                                                                   roi_corner[1]
-                                                                   - self.persons[person].max_distance_corner[1]],
-                                                                  2)
+                        label_to_corner_distance = np.linalg.norm(
+                            [roi_corner[0]
+                             - self.persons[person].max_distance_corner[0],
+                             roi_corner[1]
+                             - self.persons[person].max_distance_corner[1]],
+                            2)
                         label_corner = (
                             roi_corner
                             + (label_to_corner / label_to_corner_distance)
@@ -494,7 +523,8 @@ class HRIVisualizer(Node):
                             lineType=cv2.LINE_AA,
                         )
                         roi_corner_opposite = self.encode_opposite_corner(
-                            self.persons[person].max_distance_corner[0], self.persons[person].max_distance_corner[1]
+                            self.persons[person].max_distance_corner[0],
+                            self.persons[person].max_distance_corner[1]
                         )
                         if roi_corner_opposite[0] == 0:
                             label_top_left_x = label_corner[0]
@@ -580,8 +610,8 @@ class HRIVisualizer(Node):
                                 emoji_x = max(0, emoji_x)
                                 emoji_y = min(emoji_y, img.shape[0] - emoji.shape[0])
 
-                                img = cv2.circle(img, (int(emoji_x + (emoji.shape[1]/2)), 
-                                                       int(emoji_y + (emoji.shape[0]/2))), 
+                                img = cv2.circle(img, (int(emoji_x + (emoji.shape[1]/2)),
+                                                       int(emoji_y + (emoji.shape[0]/2))),
                                                  int(min(emoji.shape[0]/2, emoji.shape[1]/2)) - 1,
                                                  BLACK, FILLED)
 
@@ -590,13 +620,14 @@ class HRIVisualizer(Node):
 
                                 alpha_mask = emoji_mask / 255.0
 
-                                roi = alpha_mask[:, :, None] * emoji_bgr + (1 - alpha_mask)[:, :, None] * roi
+                                roi = alpha_mask[:, :, None] * emoji_bgr \
+                                    + (1 - alpha_mask)[:, :, None] * roi
 
                                 img[emoji_y:emoji_y + emoji.shape[1],
                                     emoji_x:emoji_x + emoji.shape[0]] = roi
 
                     body = tracked_persons[person].body
-                    if body and (skeleton:=body.skeleton):
+                    if body and (skeleton := body.skeleton):
                         skeleton = list(skeleton.values())
                         upper_chain = [
                             skeleton[Skeleton2D.RIGHT_WRIST],
@@ -669,7 +700,7 @@ class HRIVisualizer(Node):
                 self.img_pub.publish(img_msg)
 
     def do_diagnostics(self):
-        """ Periodic function to publish diagnostic messages """
+        """Publish diagnostic messages."""
         arr = DiagnosticArray()
         arr.header.stamp = self.get_clock().now().to_msg()
 
@@ -686,27 +717,23 @@ class HRIVisualizer(Node):
         self.diag_pub.publish(arr)
 
     def find_max_distance_corner(self, x, y, width, height):
-        """ Function returning the maximum distance
-            corner of the image. The result is encoded as:
-                - [0, 0] = top left corner
-                - [1, 0] = top right corner
-                - [0, 1] = bottom left corner
-                - [1, 1] = bottom right corner
+        """
+        Return the maximum distance corner of the image.
+
+        The result is encoded as:
+                - [0, 0] = top left corner;
+                - [1, 0] = top right corner;
+                - [0, 1] = bottom left corner;
+                - [1, 1] = bottom right corner.
         """
         return [x < width / 2, y < height / 2]
 
     def encode_opposite_corner(self, corner_x, corner_y):
-        """ Following the same type of enconding
-            described in the find_max_distance_corner,
-            this function returns the opposite corner
-        """
+        """Return the opposite corner."""
         return [int(not bool(corner_x)), int(not bool(corner_y))]
 
     def calibrate_font_size(self, number_of_letters):
-        """ Initial calibration of the font size
-            for the ids label. It uses PIL tools,
-            not opencv tools
-        """
+        """Calibrate font to fit the person label."""
         self.fontsize = 1
         label = LARGEST_LETTER * number_of_letters
         label_width = SPACE_PER_CHARACTER * number_of_letters
@@ -725,16 +752,12 @@ class HRIVisualizer(Node):
 
 
 def main(args=None):
-    # Initialize the ROS2 system
     rclpy.init(args=args)
 
-    # Create the HRIVisualizer node
     visualizer = HRIVisualizer()
 
-    # Spin the visualizer node
     rclpy.spin(visualizer)
 
-    # Clean up
     visualizer.destroy_node()
     rclpy.shutdown()
 
