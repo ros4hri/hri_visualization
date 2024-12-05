@@ -19,7 +19,7 @@ package_name = 'hri_visualization'
 
 setup(
     name=package_name,
-    version='2.2.0',
+    version='2.3.0',
     packages=find_packages(exclude=['test']),
     install_requires=[],
     tests_require=['pytest'],
