@@ -705,12 +705,12 @@ class HRIVisualizer(Node):
         arr.header.stamp = self.get_clock().now().to_msg()
 
         msg = DiagnosticStatus(
-            name="Social perception: Visualization", hardware_id="none")
+            name='/social_perception/visalization/hri_visualization', hardware_id='none')
         msg.level = DiagnosticStatus.OK
         msg.values = [
             KeyValue(key="Package name", value='hri_visualization'),
             # Update with actual rendering time if needed
-            KeyValue(key="Rendering time", value="Not Calculated")
+            # KeyValue(key="Rendering time", value="Not Calculated")
         ]
 
         arr.status = [msg]
