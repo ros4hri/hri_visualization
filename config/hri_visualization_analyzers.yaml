@@ -1,0 +1,12 @@
+/hri_visualization/add_analyzer_node:
+  ros__parameters:
+    path: Diagnostics
+    social_perception:
+      type: 'diagnostic_aggregator/AnalyzerGroup'
+      path: "Social perception"
+      analyzers:
+        visualization:
+          type: diagnostic_aggregator/GenericAnalyzer
+          path: "Visualization"
+          find_and_remove_prefix: ["/social_perception/visualization"]
+

@@ -41,6 +41,8 @@ setup(
         ('share/ament_index/resource_index/pal_configuration.' + package_name,
             ['config/' + package_name]),
         ('share/' + package_name + '/config', ['config/00-defaults.yml']),
+        ('share/' + package_name + '/config',
+         ['config/hri_visualization_analyzers.yaml']),
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/ament_index/resource_index/pal_system_module',

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch_pal import get_pal_configuration
@@ -35,6 +37,16 @@ def generate_launch_description():
         arguments=config["arguments"],
     )
 
-    ld.add_action(hri_visualization_node)
+    diagnostics_analyzer = Node(
+        package='diagnostic_aggregator',
+        executable='add_analyzer',
+        namespace=pkg,
+        output='screen',
+        emulate_tty=True,
+        parameters=[
+            os.path.join(get_package_share_directory(pkg), 'config', f'{pkg}_analyzers.yaml')],
+    )
 
+    ld.add_action(hri_visualization_node)
+    ld.add_action(diagnostics_analyzer)
     return ld
