@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.3.2 (2025-06-30)
+------------------
 * Add diagnostics analyzer
 * Contributors: Séverin Lemaignan
 
