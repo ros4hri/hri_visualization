@@ -2,6 +2,11 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Add diagnostics analyzer
+* Contributors: Séverin Lemaignan
+
 2.3.1 (2025-05-23)
 ------------------
 * fix path of diagnostics
