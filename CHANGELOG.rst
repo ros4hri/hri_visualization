@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.3.3 (2025-07-04)
+------------------
 * add image for scared face
 * Contributors: Séverin Lemaignan
 
