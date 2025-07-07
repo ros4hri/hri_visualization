@@ -705,7 +705,7 @@ class HRIVisualizer(Node):
         arr.header.stamp = self.get_clock().now().to_msg()
 
         msg = DiagnosticStatus(
-            name='/social_perception/visalization/hri_visualization', hardware_id='none')
+            name='/social_perception/visualization/hri_visualization', hardware_id='none')
         msg.level = DiagnosticStatus.OK
         msg.values = [
             KeyValue(key="Package name", value='hri_visualization'),
