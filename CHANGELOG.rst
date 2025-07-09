@@ -2,6 +2,11 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fix typo for diagnostics name
+* Contributors: Noel Jimenez
+
 2.3.3 (2025-07-04)
 ------------------
 * add image for scared face
