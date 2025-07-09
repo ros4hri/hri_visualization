@@ -2,8 +2,8 @@
 Changelog for package hri_visualization
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+2.3.4 (2025-07-09)
+------------------
 * Fix typo for diagnostics name
 * Contributors: Noel Jimenez
 
