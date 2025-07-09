@@ -172,7 +172,7 @@ class HRIVisualizer(Node):
 
         self.expressions = {}
 
-        self.speaking_image = None
+        self.speaking_icon = None
 
         self.persons_lock = Lock()
 
@@ -215,9 +215,9 @@ class HRIVisualizer(Node):
 
         return self.expressions[expression]
 
-    def get_speaking_image(self):
-        if self.speaking_image is not None:
-            return self.speaking_image
+    def get_speaking_icon(self):
+        if self.speaking_icon is not None:
+            return self.speaking_icon
         filename = "speaking.png"
         emoji = self.load_image(filename)
         if emoji is not None:
@@ -225,9 +225,9 @@ class HRIVisualizer(Node):
                         int(emoji.shape[1]*EMOJI_SIZE_MAGIC_NUMBER))
             emoji = cv2.resize(emoji, emoji_size)
             emoji[:, :, :3] = emoji[:, :, :3] + PASTEL_YELLOW
-        self.speaking_image = emoji
+        self.speaking_icon = emoji
 
-        return self.speaking_image
+        return self.speaking_icon
 
     def load_image(self, filename):
         image_path = Path(package_path) / 'images' / \
@@ -645,7 +645,7 @@ class HRIVisualizer(Node):
                         if face and (is_speaking := face.is_speaking):
 
                             if is_speaking:
-                                emoji = self.get_speaking_image()
+                                emoji = self.get_speaking_icon()
 
                                 if emoji is not None:
                                     emoji_bgr = emoji[:, :, :3]
