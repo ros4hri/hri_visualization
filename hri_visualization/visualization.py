@@ -172,6 +172,8 @@ class HRIVisualizer(Node):
 
         self.expressions = {}
 
+        self.speaking_image = None
+
         self.persons_lock = Lock()
 
     def skeleton_cb(self, skeleton_msg, args):
@@ -212,6 +214,20 @@ class HRIVisualizer(Node):
             self.expressions[expression] = emoji
 
         return self.expressions[expression]
+
+    def get_speaking_image(self):
+        if self.speaking_image is not None:
+            return self.speaking_image
+        filename = "speaking.png"
+        emoji = self.load_image(filename)
+        if emoji is not None:
+            emoji_size = (int(emoji.shape[1]*EMOJI_SIZE_MAGIC_NUMBER),
+                        int(emoji.shape[1]*EMOJI_SIZE_MAGIC_NUMBER))
+            emoji = cv2.resize(emoji, emoji_size)
+            emoji[:, :, :3] = emoji[:, :, :3] + PASTEL_YELLOW
+        self.speaking_image = emoji
+
+        return self.speaking_image
 
     def load_image(self, filename):
         image_path = Path(package_path) / 'images' / \
@@ -599,10 +615,10 @@ class HRIVisualizer(Node):
                                 emoji_mask = emoji[:, :, 3]
 
                                 emoji_x = face_x + face_width + 2
-                                emoji_y = face_y - emoji.shape[0] - 2
+                                emoji_y = face_y -  (emoji.shape[0] + 2)
 
                                 if emoji_y < 0:
-                                    emoji_y = face_y + face_height + 2
+                                    emoji_y = face_y + ( face_height + 2)
 
                                 if emoji_x + emoji.shape[1] > img.shape[1]:
                                     emoji_x = face_x - emoji.shape[1] - 2
@@ -625,6 +641,43 @@ class HRIVisualizer(Node):
 
                                 img[emoji_y:emoji_y + emoji.shape[1],
                                     emoji_x:emoji_x + emoji.shape[0]] = roi
+                                
+                        if face and (is_speaking := face.is_speaking):
+
+                            if is_speaking:
+                                emoji = self.get_speaking_image()
+
+                                if emoji is not None:
+                                    emoji_bgr = emoji[:, :, :3]
+                                    emoji_mask = emoji[:, :, 3]
+
+                                    emoji_x = face_x + face_width + 2
+                                    emoji_y = face_y -  2 *(emoji.shape[0] + 2)
+
+                                    if emoji_y < 0:
+                                        emoji_y = face_y +  face_height + emoji.shape[0] + 2
+
+                                    if emoji_x + emoji.shape[1] > img.shape[1]:
+                                        emoji_x = face_x - emoji.shape[1] - 2
+
+                                    emoji_x = max(0, emoji_x)
+                                    emoji_y = min(emoji_y, img.shape[0] - emoji.shape[0])
+
+                                    img = cv2.circle(img, (int(emoji_x + (emoji.shape[1]/2)),
+                                                        int(emoji_y + (emoji.shape[0]/2))),
+                                                    int(min(emoji.shape[0]/2, emoji.shape[1]/2)) - 1,
+                                                    PASTEL_YELLOW, thickness=0)
+
+                                    roi = img[emoji_y:emoji_y + emoji.shape[1],
+                                            emoji_x:emoji_x + emoji.shape[0]]
+
+                                    alpha_mask = emoji_mask / 255.0
+
+                                    roi = alpha_mask[:, :, None] * emoji_bgr \
+                                        + (1 - alpha_mask)[:, :, None] * roi
+
+                                    img[emoji_y:emoji_y + emoji.shape[1],
+                                        emoji_x:emoji_x + emoji.shape[0]] = roi
 
                     body = tracked_persons[person].body
                     if body and (skeleton := body.skeleton):
