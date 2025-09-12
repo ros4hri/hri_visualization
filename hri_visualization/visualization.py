@@ -131,9 +131,9 @@ class HRIVisualizer(Node):
 
         self.hri_listener = HRIListener('hri_listener')
 
-        resolved_topic_name = self.resolve_topic_name("/image")
+        self.image_topic = self.resolve_topic_name("/image")
         if self.compressed_input:
-            compressed_image_topic = resolved_topic_name+"/compressed"
+            compressed_image_topic = self.image_topic + "/compressed"
             self.img_sub = self.create_subscription(
                 CompressedImage,
                 compressed_image_topic,
@@ -141,10 +141,10 @@ class HRIVisualizer(Node):
                 qos_profile=qos_profile_sensor_data)
         else:
             self.img_sub = self.create_subscription(
-                Image, "/image",
+                Image, self.image_topic,
                 self.img_cb,
                 qos_profile=qos_profile_sensor_data)
-        self.hri_overlay_topic = resolved_topic_name + "/hri_overlay"
+        self.hri_overlay_topic = self.image_topic + "/hri_overlay"
 
         if self.compressed_output:
             self.img_pub = self.create_publisher(
@@ -273,6 +273,10 @@ class HRIVisualizer(Node):
                 (height, width, _) = img.shape
                 for person in list(self.persons):
                     face = tracked_persons[person].face
+                    # if the face has a data source, check it matches
+                    # the image topic we are using as background
+                    if face and face.data_source and face.data_source != self.image_topic:
+                        continue
                     if face and (roi := face.roi):
                         # Label sizing calibration
                         label_width = self.persons[person].label_width
@@ -608,11 +612,13 @@ class HRIVisualizer(Node):
                                     emoji_x = face_x - emoji.shape[1] - 2
 
                                 emoji_x = max(0, emoji_x)
-                                emoji_y = min(emoji_y, img.shape[0] - emoji.shape[0])
+                                emoji_y = min(
+                                    emoji_y, img.shape[0] - emoji.shape[0])
 
                                 img = cv2.circle(img, (int(emoji_x + (emoji.shape[1]/2)),
                                                        int(emoji_y + (emoji.shape[0]/2))),
-                                                 int(min(emoji.shape[0]/2, emoji.shape[1]/2)) - 1,
+                                                 int(min(
+                                                     emoji.shape[0]/2, emoji.shape[1]/2)) - 1,
                                                  BLACK, FILLED)
 
                                 roi = img[emoji_y:emoji_y + emoji.shape[1],
@@ -665,7 +671,8 @@ class HRIVisualizer(Node):
                             joint_x = int(skeleton[joint][0] * width)
                             joint_y = int(skeleton[joint][1] * height)
                             img = cv2.circle(
-                                img, (joint_x, joint_y), JOINT_RADIUS, PASTEL_YELLOW, FILLED
+                                img, (joint_x,
+                                      joint_y), JOINT_RADIUS, PASTEL_YELLOW, FILLED
                             )
 
                         for idx, segment in enumerate(skeleton_lines_segments):
